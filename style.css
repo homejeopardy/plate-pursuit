@@ -259,10 +259,7 @@ body.landing-page { background: var(--paper); color: var(--ink); }
 .p-join .btn:disabled { opacity: .7; }
 .p-small .room-code { color: #fff; }
 
-/* answer countdown inside the buzzing team's score sign */
-.d-team { position: relative; overflow: hidden; }
-.d-team .s { display: flex; align-items: center; justify-content: center; gap: 1.2vw; }
-.d-team .cd { width: 6vh; height: 6vh; border-radius: 50%; background: var(--black); color: var(--yellow); flex: none;
-  display: grid; place-items: center; font: 900 3.8vh/1 var(--font); padding-top: .5vh; font-variant-numeric: tabular-nums; }
-.d-team .cd-bar { position: absolute; left: .7vh; bottom: .7vh; height: .9vh; background: var(--black); border-radius: .45vh; max-width: calc(100% - 1.4vh); }
+/* answer countdown: a yellow warning sign beside the points sign */
+.limit.answer { --sign-bg: var(--yellow); background: var(--yellow); box-shadow: inset 0 0 0 .5vh var(--yellow), inset 0 0 0 .9vh var(--black); transition: opacity .2s; }
+.limit.answer.idle { opacity: .25; }
 .p-buzz.counting span { font-size: 30vw; }

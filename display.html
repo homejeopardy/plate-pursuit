@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Projector</title>
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=8">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body class="display-page">
@@ -16,9 +16,9 @@
 <div class="unlock" id="unlock"><div class="sign green">Click to start the projector<small>Turns on sound and goes full screen</small></div></div>
 <div class="conn" id="conn"></div>
 
-<script src="mode.js?v=6"></script>
+<script src="mode.js?v=8"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="shared.js?v=6"></script>
+<script src="shared.js?v=8"></script>
 <script>
 const $ = id => document.getElementById(id);
 let lastEv = null, lastKey = '', lastPlateKey = '';
@@ -82,7 +82,8 @@ function renderStage(s) {
   const lane = Array.from({ length: 10 }, () => '<i></i>').join('');
   const under = showAnswer
     ? `<div><div class="d-answer">${esc(p.answer)}</div>${s.result ? `<div class="d-result">+${s.result.points} to ${esc(teamName(s, s.result.teamId))}</div>` : ''}</div>`
-    : `<div class="limit"><div class="t">WORTH</div><div class="n" id="value"></div></div><div class="lane" id="lane">${lane}</div>`;
+    : `<div class="limit"><div class="t">WORTH</div><div class="n" id="value"></div></div><div class="lane" id="lane">${lane}</div>`
+      + `<div class="limit answer ${s.phase === 'buzzed' && s.answerEndsAt ? '' : 'idle'}" id="answerSign"><div class="t" id="answerLabel">ANSWER</div><div class="n" id="answerNum">${s.settings.answerSeconds || ''}</div></div>`;
   html = `<div class="d-q"><div class="count">Plate ${s.used.length + (showAnswer ? 0 : 1)} of ${s.puzzles.length}</div><div class="q">${esc(p.cat || '')}</div></div>
     <div class="d-plate ${enter}">${plateHTML(covered ? '?' : p.plate, { cls: covered ? 'covered' : '' })}</div>
     <div class="d-under">${under}</div>`;
@@ -90,24 +91,21 @@ function renderStage(s) {
 }
 
 function renderTeams(s) {
-  const roundNames = { lobby: '', ready: 'Buzz-in round', running: 'Buzz-in round', buzzed: 'Buzz-in round', revealed: 'Buzz-in round',
+  const roundNames = { lobby: '', ready: 'Buzz-in round', running: 'Buzz-in round', buzzed: 'Buzz-in round', paused: 'Buzz-in round', revealed: 'Buzz-in round',
     speedready: 'Speed round', speed: 'Speed round', speedover: 'Speed round', final: 'Game over' };
   $('round').textContent = roundNames[s.phase] || '';
   $('teams').innerHTML = s.teams.map(t => {
     const cls = [s.buzzed === t.id && s.phase === 'buzzed' ? 'buzzed' : '',
-      s.locked.includes(t.id) && ['running', 'buzzed'].includes(s.phase) ? 'out' : '',
+      s.locked.includes(t.id) && ['running', 'buzzed', 'paused'].includes(s.phase) ? 'out' : '',
       s.speed && s.speed.teamId === t.id && s.phase.startsWith('speed') ? 'active' : ''].join(' ');
-    const answering = s.phase === 'buzzed' && s.buzzed === t.id && s.answerEndsAt;
-    return `<div class="sign green d-team ${cls}"><div class="n">${esc(t.name)}</div>`
-      + `<div class="s">${t.score}${answering ? `<span class="cd" aria-label="seconds left to answer" id="cdNum"></span>` : ''}</div>`
-      + (answering ? `<i class="cd-bar" id="cdBar"></i>` : '') + `</div>`;
+    return `<div class="sign green d-team ${cls}"><div class="n">${esc(t.name)}</div><div class="s">${t.score}</div></div>`;
   }).join('');
 }
 
 
 function tick() {
   const s = PP.state; if (!s) return;
-  if (['ready', 'running', 'buzzed'].includes(s.phase) && $('value')) {
+  if (['ready', 'running', 'buzzed', 'paused'].includes(s.phase) && $('value')) {
     const v = s.phase === 'buzzed' ? s.valueAtBuzz : ppValue(s);
     $('value').textContent = v;
     const lit = s.phase === 'ready' ? 10 : Math.ceil(ppFraction(s) * 10);
@@ -119,10 +117,10 @@ function tick() {
     $('clock').classList.toggle('low', left <= 10);
   }
   if (s.phase === 'speedover' && $('clock')) $('clock').textContent = '0';
-  if (s.phase === 'buzzed' && $('cdNum')) {
-    const left = ppAnswerLeft(s);
-    $('cdNum').textContent = Math.ceil(left);
-    $('cdBar').style.width = (left / s.settings.answerSeconds * 100) + '%';
+  if ($('answerNum')) {
+    const counting = s.phase === 'buzzed' && s.answerEndsAt;
+    $('answerSign').classList.toggle('idle', !counting);
+    $('answerNum').textContent = counting ? Math.ceil(ppAnswerLeft(s)) : (s.settings.answerSeconds || '');
   }
 }
 setInterval(tick, 100);

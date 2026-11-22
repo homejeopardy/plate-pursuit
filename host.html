@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Host</title>
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=8">
 </head>
 <body class="host-page">
 <div class="host">
@@ -71,7 +71,7 @@
   <div class="card wide">
     <h2>Keyboard</h2>
     <div class="keys">
-      <div><kbd>Space</kbd> show plate / start the clock / next</div>
+      <div><kbd>Space</kbd> show plate / start the clock / reopen buzzers / next</div>
       <div><kbd>N</kbd> next plate</div>
       <div><kbd>C</kbd> correct</div>
       <div><kbd>X</kbd> wrong</div>
@@ -82,10 +82,10 @@
   </div>
 </div>
 
-<script src="mode.js?v=6"></script>
+<script src="mode.js?v=8"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="engine.js?v=6"></script>
-<script src="shared.js?v=6"></script>
+<script src="engine.js?v=8"></script>
+<script src="shared.js?v=8"></script>
 <script>
 const $ = id => document.getElementById(id);
 const act = PP.act;
@@ -112,6 +112,7 @@ function controlsFor(s) {
     case 'ready': return B('start', 'Show plate + start clock', 'Space', 'primary') + B('reveal', 'Skip / reveal', 'R');
     case 'running': return B('correct', 'Correct', 'C', 'good', false) + B('wrong', 'Wrong', 'X', 'bad', false) + B('reveal', 'Reveal answer', 'R');
     case 'buzzed': return B('correct', 'Correct', 'C', 'good') + B('wrong', 'Wrong', 'X', 'bad') + B('reveal', 'Reveal answer', 'R');
+    case 'paused': return B('reopen', 'Reopen buzzers', 'Space', 'primary') + B('reveal', 'Reveal answer', 'R');
     case 'revealed': return B('next', 'Next plate', 'N / Space', 'primary');
     case 'speedready': return B('speedStart', 'Start 60 seconds', 'Space', 'primary');
     case 'speed': return B('correct', 'Correct', 'C', 'good') + B('pass', 'Pass', 'P', 'bad') + B('speedStop', 'Stop clock');
@@ -135,7 +136,7 @@ function render(s) {
     $('newRoom').onclick = () => { if (confirm('Switch to a new room code? The projector and every phone will need the new code.')) PP.newRoom(); };
   }
 
-  const phaseNames = { lobby: 'Join screen', ready: 'Plate is covered', running: 'Clock running', buzzed: 'Buzzed in', revealed: 'Answer shown',
+  const phaseNames = { lobby: 'Join screen', ready: 'Plate is covered', running: 'Clock running', buzzed: 'Buzzed in', paused: 'Waiting for you to reopen buzzing', revealed: 'Answer shown',
     speedready: 'Speed round ready', speed: 'Speed round running', speedover: 'Speed round over', final: 'Final standings' };
   $('nowTitle').textContent = 'Now: ' + (phaseNames[s.phase] || s.phase);
   const showPlate = p && !['lobby', 'final', 'speedready'].includes(s.phase);
@@ -147,7 +148,7 @@ function render(s) {
   else if (s.phase === 'revealed' && s.result) status = `<b>${esc(teamName(s, s.result.teamId))}</b> got it for ${s.result.points}`;
   else if (s.phase === 'revealed') status = 'Nobody scored';
   else if (s.phase.startsWith('speed')) status = `Speed round: <b>${esc(teamName(s, s.speed.teamId))}</b> · ${s.speed.count} solved`;
-  if (s.locked.length && ['running', 'buzzed'].includes(s.phase)) status += `<div class="note">Locked out: ${s.locked.map(id => esc(teamName(s, id))).join(', ')}</div>`;
+  if (s.locked.length && ['running', 'buzzed', 'paused'].includes(s.phase)) status += `<div class="note">Locked out: ${s.locked.map(id => esc(teamName(s, id))).join(', ')}</div>`;
   $('hStatus').innerHTML = status;
   $('controls').innerHTML = controlsFor(s);
   $('controls').querySelectorAll('[data-act]').forEach(b => b.onclick = () => act(b.dataset.act));
@@ -155,7 +156,7 @@ function render(s) {
   // teams (don't clobber a name being edited)
   const focusedId = document.activeElement && document.activeElement.dataset.rename;
   $('teams').innerHTML = s.teams.length ? s.teams.map((t, i) => `
-    <div class="team ${s.phase === 'buzzed' && s.buzzed === t.id ? 'buzzed' : ''} ${s.locked.includes(t.id) && ['running','buzzed'].includes(s.phase) ? 'out' : ''}">
+    <div class="team ${s.phase === 'buzzed' && s.buzzed === t.id ? 'buzzed' : ''} ${s.locked.includes(t.id) && ['running','buzzed','paused'].includes(s.phase) ? 'out' : ''}">
       <button class="btn key" data-buzz="${t.id}" title="Buzz in for this team" ${s.phase === 'running' ? '' : 'disabled'}>${i + 1}</button>
       <div><input data-rename="${t.id}" value="${esc(t.name)}"><div class="note"><span class="dot ${s.online[t.id] ? 'on' : ''}"></span>${s.online[t.id] ? 'phone connected' : 'no phone'}</div></div>
       <div class="score">${t.score}</div>
@@ -195,6 +196,7 @@ function tick() {
   const s = PP.state; if (!s) return;
   if (s.phase === 'running') $('hBig').textContent = ppValue(s) + ' pts';
   else if (s.phase === 'speed') $('hBig').textContent = Math.ceil(ppSpeedLeft(s)) + 's left';
+  else if (s.phase === 'paused') $('hBig').textContent = 'Paused at ' + ppValue(s) + ' pts';
   else if (s.phase === 'buzzed' && s.answerEndsAt) $('hBig').textContent = Math.ceil(ppAnswerLeft(s)) + 's to answer';
   else $('hBig').textContent = '';
 }
@@ -208,6 +210,7 @@ document.addEventListener('keydown', e => {
   if (k === ' ') {
     e.preventDefault();
     if (s.phase === 'ready') act('start');
+    else if (s.phase === 'paused') act('reopen');
     else if (s.phase === 'speedready') act('speedStart');
     else if (['lobby', 'revealed'].includes(s.phase)) act('next');
   }

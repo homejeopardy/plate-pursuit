@@ -5,7 +5,6 @@ function createEngine(opts = {}) {
   const changed = () => { opts.persist && opts.persist(S); opts.onChange && opts.onChange(); };
   const DEFAULT_PUZZLES = `## What does it say?
   EZ PZ | Easy peasy
-  UR2SLO | You are too slow
   XLR8 | Accelerate
   4GTFUL | Forgetful
   YYURYYUB | Too wise you are, too wise you be
@@ -69,6 +68,19 @@ function createEngine(opts = {}) {
   if (S.phase === 'running') S.phase = 'ready';
   if (S.phase === 'speed') S.phase = 'speedover';
   setTimeout(armAnswer, 0);
+  // The "UR2SLO | You are too slow" plate read like the game mocking a team that ran out of time,
+  // so it's gone from the starter list. Take it out of saved games too, keeping which plates were played.
+  if (/^\s*UR2SLO\s*\|\s*You are too slow\s*$/mi.test(S.puzzleText || '')) {
+    const plateAt = i => (S.puzzles[i] || {}).plate;
+    const usedPlates = S.used.map(plateAt), curPlate = plateAt(S.cur);
+    S.puzzleText = S.puzzleText.replace(/^\s*UR2SLO\s*\|\s*You are too slow\s*\n?/mi, '');
+    S.puzzles = parsePuzzles(S.puzzleText);
+    const idx = pl => S.puzzles.findIndex(q => q.plate === pl);
+    S.used = usedPlates.map(idx).filter(i => i >= 0);
+    S.cur = curPlate != null && idx(curPlate) >= 0 ? idx(curPlate) : null;
+    if (S.cur == null && !['lobby', 'final'].includes(S.phase) && !S.phase.startsWith('speed')) S.phase = 'lobby';
+    setTimeout(() => opts.persist && opts.persist(S), 0);
+  }
   
   // ---------- engine ----------
   const now = () => Date.now();
@@ -140,11 +152,12 @@ function createEngine(opts = {}) {
       if (S.phase !== 'buzzed') return;
       S.locked.push(S.buzzed); S.buzzed = null;
       if (S.teams.every(t => S.locked.includes(t.id))) { markUsed(S.cur); S.phase = 'revealed'; S.result = null; }
-      else { S.phase = 'running'; S.runningSince = now(); }
+      else S.phase = 'paused';      // buzzers stay closed until the host reopens them
       fire('wrong');
     },
+    reopen() { if (S.phase === 'paused') { S.phase = 'running'; S.runningSince = now(); fire('start'); } },
     reveal() {
-      if (!['ready', 'running', 'buzzed'].includes(S.phase)) return;
+      if (!['ready', 'running', 'buzzed', 'paused'].includes(S.phase)) return;
       freeze(); markUsed(S.cur); S.phase = 'revealed'; S.buzzed = null; S.result = null; fire('reveal');
     },
     pass() {

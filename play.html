@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0e1726">
 <title>Plate Pursuit · Buzzer</title>
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=8">
 </head>
 <body class="phone-page">
 <div class="phone" id="app"></div>
-<script src="mode.js?v=6"></script>
+<script src="mode.js?v=8"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="shared.js?v=6"></script>
+<script src="shared.js?v=8"></script>
 <script>
 const app = document.getElementById('app');
 if (PP.needRoom('JOIN THE GAME')) throw new Error('waiting for room code');
@@ -95,6 +95,7 @@ function render(s) {
   switch (s.phase) {
     case 'lobby': msg = "You're in. Waiting for the game to start."; break;
     case 'ready': msg = 'Next plate coming up'; break;
+    case 'paused': msg = locked ? 'Locked out for this plate' : 'Get ready to buzz…'; break;
     case 'running':
       if (locked) msg = 'Locked out for this plate'; else { msg = '<b>Buzz when you know it!</b>'; enabled = true; }
       break;
