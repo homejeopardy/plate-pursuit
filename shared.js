@@ -24,15 +24,25 @@ const PP = (() => {
   const httpPost = (url, data) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data || {}) })
     .then(r => r.json()).catch(() => ({ ok: false }));
 
+  // ---------- website: messages go through public MQTT relays over secure WebSockets ----------
+  // No direct phone-to-laptop connection is needed, so school networks that block
+  // WebRTC still work. The host listens on every relay; joiners use whichever connects.
+  const RELAYS = ['wss://broker.hivemq.com:8884/mqtt', 'wss://broker.emqx.io:8084/mqtt'];
+  const topic = t => `plate-pursuit/v1/${room}/${t}`;
+  const rid = () => Math.random().toString(36).slice(2, 10);
+  const enc = o => JSON.stringify(o);
+  const dec = b => { try { return JSON.parse(typeof b === 'string' ? b : new TextDecoder().decode(b)); } catch (e) { return null; } };
+
   // ---------- website: the host page runs the game ----------
-  let engine = null, peer = null, bc = null;
-  const conns = new Set();
+  let engine = null, bc = null;
+  const relays = [];                 // host: one client per relay
+  const seen = {};                   // teamId -> last time that phone said hello
   const baseUrl = () => location.href.split(/[?#]/)[0].replace(/[^/]*$/, '');
   function hostSnapshot() {
-    const online = {};
-    for (const c of conns) if (c.teamId && c.open) online[c.teamId] = true;
+    const online = {}, cutoff = Date.now() - 25000;
+    for (const id in seen) if (seen[id] > cutoff) online[id] = true;
     const joinUrl = baseUrl() + 'play.html?room=' + room;
-    return { ...engine.state, serverNow: Date.now(), online, joinUrl, joinUrls: [joinUrl], room, hostOnline: !!(peer && peer.open) };
+    return { ...engine.state, serverNow: Date.now(), online, joinUrl, joinUrls: [joinUrl], room, hostOnline: relays.some(r => r.connected) };
   }
   let queued = false;
   function broadcast() {
@@ -40,11 +50,22 @@ const PP = (() => {
     setTimeout(() => {
       queued = false;
       const snap = hostSnapshot();
-      for (const c of conns) if (c.open) c.send({ snap });
+      const payload = enc({ snap });
+      for (const r of relays) if (r.connected) r.publish(topic('state'), payload, { qos: 1, retain: true });
       if (bc) bc.postMessage({ snap });
       receive(snap);
-      if (!snap.hostOnline && status == null) status = 'opening';
+      if (!snap.hostOnline) status = relays.length ? "Can't reach the connection servers. Check the internet." : status;
     }, 0);
+  }
+  function handleRequest(client, msg) {
+    if (!msg || typeof msg !== 'object' || !msg.cid) return;
+    let r = { ok: true };
+    if (msg.teamId) seen[msg.teamId] = Date.now();
+    if (msg.kind === 'join') { const t = engine.join(msg.name, msg.teamId); seen[t.id] = Date.now(); r.team = t; broadcast(); }
+    else if (msg.kind === 'buzz') r.won = engine.buzz(msg.teamId);
+    else if (msg.kind === 'hello') { broadcast(); return; }
+    else if (msg.kind === 'bye') { broadcast(); return; }
+    if (msg.id != null) client.publish(topic('res/' + msg.cid), enc({ reply: msg.id, ...r }), { qos: 1 });
   }
   function startHost() {
     if (LOCAL) return localConnect();
@@ -59,106 +80,117 @@ const PP = (() => {
       bc = new BroadcastChannel(PREFIX + room);
       bc.onmessage = e => { if (e.data && e.data.hello) broadcast(); };
     }
+    if (!window.mqtt) { broadcast(); return setStatus("Couldn't load the connection library. Check the internet, then reload."); }
+    status = `Opening room ${room}…`;
+    for (const url of RELAYS) {
+      const c = mqtt.connect(url, {
+        clientId: 'pp-host-' + room + '-' + rid(), clean: true, reconnectPeriod: 3000, connectTimeout: 8000, keepalive: 20,
+        will: { topic: topic('host'), payload: 'offline', qos: 1, retain: true },
+      });
+      relays.push(c);
+      c.on('connect', () => {
+        c.subscribe(topic('req'), { qos: 1 });
+        c.publish(topic('host'), 'online', { qos: 1, retain: true });
+        status = null; broadcast();
+      });
+      c.on('message', (t, buf) => { if (t === topic('req')) handleRequest(c, dec(buf)); });
+      c.on('close', () => broadcast());
+      c.on('error', e => console.warn('relay error', url, e && e.message));
+    }
     broadcast();
-    if (!window.Peer) return setStatus("Couldn't load the connection library. Check the internet, then reload.");
-    let tries = 0;
-    const open = () => {
-      setStatus(`Opening room ${room}…`);
-      peer = new Peer(PREFIX + room, { debug: 1 });
-      peer.on('open', () => { tries = 0; status = null; broadcast(); });
-      peer.on('connection', conn => {
-        conn.teamId = Number((conn.metadata || {}).teamId) || null;
-        conn.on('open', () => { conns.add(conn); broadcast(); });
-        conn.on('data', msg => {
-          if (!msg || typeof msg !== 'object') return;
-          let r = { ok: true };
-          if (msg.kind === 'join') { const t = engine.join(msg.name, msg.teamId); conn.teamId = t.id; r.team = t; broadcast(); }
-          else if (msg.kind === 'buzz') r.won = engine.buzz(msg.teamId);
-          else if (msg.kind === 'hello') { if (msg.teamId) conn.teamId = Number(msg.teamId); broadcast(); }
-          if (msg.id != null && conn.open) conn.send({ reply: msg.id, ...r });
-        });
-        const gone = () => { if (conns.delete(conn)) broadcast(); };
-        conn.on('close', gone); conn.on('error', gone);
-      });
-      peer.on('disconnected', () => { if (!peer.destroyed) peer.reconnect(); });
-      peer.on('error', e => {
-        broadcast();
-        if (e.type === 'unavailable-id') {
-          peer.destroy();
-          if (++tries <= 6) { setStatus(`Room ${room} is still closing from last time. Retrying…`); setTimeout(open, 3000); }
-          else setStatus(`Room ${room} is in use. Is the host page open in another tab? If not, click "New room code".`);
-        } else if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(e.type)) {
-          setStatus("Can't reach the connection server. Check the internet. Retrying…");
-          peer.destroy(); setTimeout(open, 3000);
-        } else console.warn('peer error', e.type, e);
-      });
-    };
-    open();
-    setInterval(() => { for (const c of conns) if (c.open) c.send({ now: Date.now() }); }, 4000);
+    // keep everyone's clock in sync, and let screens notice if the host goes away
+    setInterval(() => { const p = enc({ now: Date.now() }); for (const r of relays) if (r.connected) r.publish(topic('ping'), p, { qos: 0 }); }, 5000);
+    // refresh "phone connected" dots as phones go quiet
+    setInterval(broadcast, 10000);
+    addEventListener('pagehide', () => { for (const r of relays) if (r.connected) r.publish(topic('host'), 'offline', { qos: 1, retain: true }); });
   }
   function newCode() { return Array.from({ length: 4 }, () => LETTERS[Math.floor(Math.random() * LETTERS.length)]).join(''); }
   function newRoom() {
+    for (const r of relays) if (r.connected) { r.publish(topic('host'), 'offline', { qos: 1, retain: true }); r.publish(topic('state'), '', { qos: 1, retain: true }); }
     safe(() => localStorage.setItem(PREFIX + 'room', newCode()));
-    if (peer) peer.destroy();
-    location.reload();
+    setTimeout(() => location.reload(), 400);
   }
 
   // ---------- website: projector and phones join the host's room ----------
-  let jpeer = null, conn = null, myTeam = null, pending = {}, nextId = 1, lastHeard = 0, opened = null, retry = null;
+  const cid = rid();
+  let jc = null, relayIdx = 0, myTeam = null, pending = {}, nextId = 1, lastHeard = 0, hostState = null, opened = [], started = false;
   function joinStart() {
-    if (jpeer) return;
+    if (started) return; started = true;
     if (window.BroadcastChannel) {   // projector opened from the host on the same computer
       bc = new BroadcastChannel(PREFIX + room);
       bc.onmessage = e => { if (e.data && e.data.snap) { lastHeard = Date.now(); receive(e.data.snap); } };
       bc.postMessage({ hello: 1 });
     }
-    if (!window.Peer) return setStatus("Couldn't load the connection library. Check the internet, then reload.");
-    setStatus(`Connecting to room ${room}…`);
-    jpeer = new Peer({ debug: 1 });
-    let stalls = 0;
-    const later = (ms, why) => { if (why) setStatus(why); clearTimeout(retry); retry = setTimeout(connect, ms); };
-    const connect = () => {
-      clearTimeout(retry);
-      if (conn) safe(() => conn.close());
-      if (jpeer.disconnected) { jpeer.reconnect(); return later(2000); }
-      const c = (conn = jpeer.connect(PREFIX + room, { metadata: { teamId: myTeam }, serialization: 'json', reliable: true }));
-      c.on('open', () => { stalls = 0; lastHeard = Date.now(); if (opened) { opened(); opened = null; } });
-      c.on('data', m => {
-        lastHeard = Date.now();
-        if (m && m.reply != null) { const f = pending[m.reply]; delete pending[m.reply]; if (f) f(m); return; }
-        if (m && m.snap) receive(m.snap);
-      });
-      c.on('close', () => { if (conn === c) { connected = false; later(1500, `Lost the host. Reconnecting to room ${room}…`); } });
-      setTimeout(() => {
-        if (conn === c && !c.open) later(0, ++stalls >= 2
-          ? `Found room ${room}, but this browser won't connect to it. A VPN, a privacy setting or a strict network can block this.`
-          : `Connecting to room ${room}…`);
-      }, 6000);
-    };
-    jpeer.on('open', connect);
-    jpeer.on('disconnected', () => { if (!jpeer.destroyed) jpeer.reconnect(); });
-    jpeer.on('error', e => {
-      if (e.type === 'peer-unavailable') later(3000, `Waiting for room ${room}. Is the host page open? Check the room code.`);
-      else if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(e.type)) later(3000, "Can't reach the connection server. Check the internet. Retrying…");
-      else console.warn('peer error', e.type, e);
-    });
+    if (!window.mqtt) return setStatus("Couldn't load the connection library. Check the internet, then reload.");
+    tryRelay();
     setInterval(() => {
-      if (conn && conn.open && Date.now() - lastHeard > 30000) { connected = false; later(0, `Lost the host. Reconnecting to room ${room}…`); }
-    }, 3000);
+      if (jc && jc.connected) jc.publish(topic('req'), enc({ cid, kind: 'hello', teamId: myTeam }), { qos: 0 });
+      if (jc && jc.connected && hostState === 'online' && lastHeard && Date.now() - lastHeard > 70000) { connected = false; setStatus(`Lost the host. Is the host page still open?`); }
+    }, 8000);
+  }
+  function tryRelay() {
+    const url = RELAYS[relayIdx % RELAYS.length];
+    setStatus(`Connecting to room ${room}…`);
+    const c = (jc = mqtt.connect(url, {
+      clientId: 'pp-' + cid + '-' + rid(), clean: true, reconnectPeriod: 3000, connectTimeout: 7000, keepalive: 20,
+      will: { topic: topic('req'), payload: enc({ cid, kind: 'bye', teamId: myTeam }), qos: 0 },
+    }));
+    let gaveUp = false;
+    const failover = setTimeout(() => {          // this relay didn't connect: try the next one
+      if (c.connected) return;
+      gaveUp = true; c.end(true);
+      relayIdx++;
+      if (relayIdx % RELAYS.length === 0) setStatus("Can't reach the connection servers. This network may block them. Try cellular data or another Wi-Fi.");
+      setTimeout(tryRelay, relayIdx % RELAYS.length === 0 ? 3000 : 0);
+    }, 9000);
+    c.on('connect', () => {
+      clearTimeout(failover);
+      c.subscribe([topic('state'), topic('ping'), topic('host'), topic('res/' + cid)], { qos: 1 });
+      c.publish(topic('req'), enc({ cid, kind: 'hello', teamId: myTeam }), { qos: 0 });
+      setTimeout(() => { if (!state || hostState !== 'online') setStatus(`Waiting for room ${room}. Is the host page open? Check the room code.`); }, 3500);
+      const waiting = opened; opened = []; waiting.forEach(f => f());
+    });
+    c.on('message', (t, buf, packet) => {
+      if (t === topic('host')) {
+        hostState = String(buf);
+        if (hostState === 'offline') { connected = false; setStatus(`Waiting for room ${room}. The host page is closed.`); }
+        else if (state) { status = null; emit(); }
+        return;
+      }
+      const m = dec(buf); if (!m) return;
+      if (t === topic('ping')) { lastHeard = Date.now(); offset = m.now - Date.now(); if (status && hostState === 'online' && state) { status = null; connected = true; emit(); } return; }
+      if (t === topic('state')) {
+        if (!m.snap) return;
+        const keepOffset = packet && packet.retain;      // a retained copy can be old: don't trust its clock
+        const o = offset;
+        lastHeard = Date.now();
+        state = m.snap; connected = hostState !== 'offline';
+        if (keepOffset) offset = o; else offset = m.snap.serverNow - Date.now();
+        if (hostState !== 'offline') status = null;
+        emit(); return;
+      }
+      if (m.reply != null) { const f = pending[m.reply]; delete pending[m.reply]; if (f) f(m); }
+    });
+    c.on('close', () => { if (jc === c && !gaveUp && started) { connected = false; setStatus(`Reconnecting to room ${room}…`); emit(); } });
+    c.on('error', e => console.warn('relay error', url, e && e.message));
   }
   function request(kind, data) {
     joinStart();
     return new Promise(resolve => {
       const send = () => {
         const id = nextId++;
-        const t = setTimeout(() => { delete pending[id]; resolve({ ok: false }); }, 6000);
+        const t = setTimeout(() => {
+          delete pending[id];
+          if (!status) status = hostState === 'online' ? "The host didn't answer. Try again." : `Waiting for room ${room}. Is the host page open? Check the room code.`;
+          resolve({ ok: false });
+        }, 7000);
         pending[id] = m => { clearTimeout(t); resolve(m); };
-        conn.send({ id, kind, ...data });
+        jc.publish(topic('req'), enc({ cid, id, kind, ...data }), { qos: 1 });
       };
-      if (conn && conn.open) send();
+      if (jc && jc.connected) send();
       else {
-        const t = setTimeout(() => { opened = null; resolve({ ok: false }); }, 10000);
-        opened = () => { clearTimeout(t); send(); };
+        const t = setTimeout(() => resolve({ ok: false }), 15000);
+        opened.push(() => { clearTimeout(t); send(); });
       }
     });
   }
@@ -175,8 +207,8 @@ const PP = (() => {
     connect(teamId) {
       if (LOCAL) return localConnect(teamId);
       if (teamId) myTeam = teamId;
-      if (!jpeer) joinStart();
-      else if (conn && conn.open && teamId) conn.send({ kind: 'hello', teamId });
+      if (!started) joinStart();
+      else if (jc && jc.connected && teamId) jc.publish(topic('req'), enc({ cid, kind: 'hello', teamId }), { qos: 0 });
     },
     post(url, data) {
       if (LOCAL) return httpPost(url, data);

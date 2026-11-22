@@ -8,7 +8,7 @@ A license-plate puzzle game for a classroom: a host screen, a projector screen, 
 2. Click **Open projector window** and drag it to the projector. Click it once to turn on sound and go full screen.
 3. Players scan the QR code on the projector (or open `play.html` and type the room code) and enter a team name.
 
-The host page runs the game. The projector and phones connect to it through PeerJS, so phones can be on any network, including cellular data, as long as they have internet. Keep the host page open for the whole game: closing it ends the room.
+The host page runs the game. The projector and phones talk to it through public MQTT relays over secure WebSockets (HiveMQ, with EMQX as a backup), so no direct phone-to-laptop connection is needed. Phones can be on any network, including cellular data or school Wi-Fi, as long as it has internet and doesn't block those relays. Room traffic (team names, scores) passes through those public relays, so don't type anything private. Keep the host page open for the whole game: closing it ends the room.
 
 ## Rounds
 
