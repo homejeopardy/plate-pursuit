@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0e1726">
+<title>Plate Pursuit · Buzzer</title>
+<link rel="stylesheet" href="style.css?v=2">
+</head>
+<body class="phone-page">
+<div class="phone" id="app"></div>
+<script src="mode.js?v=2"></script>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="shared.js?v=2"></script>
+<script>
+const app = document.getElementById('app');
+if (PP.needRoom('JOIN THE GAME')) throw new Error('waiting for room code');
+const KEY = 'plate-pursuit-team' + (PP.room ? '-' + PP.room : '');
+let me = null;
+try { me = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+let pending = false, lastBuzzMine = false;
+
+function showJoin(msg) {
+  app.innerHTML = `<div class="p-join">
+    <div class="p-plate">${plateHTML('PL8 PRST')}</div>
+    <h1>JOIN THE GAME</h1>
+    <input id="name" maxlength="24" placeholder="Team name" autocomplete="off">
+    <button class="btn primary" id="go">Join</button>
+    <div class="p-small">${msg || 'Everyone on a team can use one phone.'}</div></div>`;
+  const go = async () => {
+    const name = document.getElementById('name').value.trim();
+    if (!name) return document.getElementById('name').focus();
+    const r = await PP.post('/join', { name });
+    if (!r.ok) return showJoin(PP.local ? "Couldn't reach the game. Are you on the same Wi-Fi?" : "Couldn't reach the game. " + (PP.status || 'Check the room code and try again.'));
+    me = { id: r.team.id };
+    try { localStorage.setItem(KEY, JSON.stringify(me)); } catch (e) {}
+    start();
+  };
+  document.getElementById('go').onclick = go;
+  document.getElementById('name').onkeydown = e => { if (e.key === 'Enter') go(); };
+}
+
+function start() {
+  app.innerHTML = `<div class="p-top"><div class="sign green p-name" id="nm"></div><div class="p-score" id="sc"></div></div>
+    <div class="p-msg" id="msg"></div>
+    <div class="p-buzz-wrap"><button class="p-buzz" id="buzz" disabled><span id="buzzLabel">BUZZ</span></button></div>
+    <div class="p-small" id="foot"></div>`;
+  const b = document.getElementById('buzz');
+  const press = async e => {
+    e.preventDefault();
+    if (b.disabled || pending) return;
+    pending = true; b.disabled = true;
+    const r = await PP.post('/buzz', { teamId: me.id });
+    pending = false;
+    if (r.won && navigator.vibrate) navigator.vibrate(200);
+    render(PP.state);
+  };
+  b.addEventListener('pointerdown', press);
+  PP.connect(me.id);
+}
+
+function render(s) {
+  if (!s || !me || !document.getElementById('buzz')) return;
+  const t = s.teams.find(x => x.id === me.id);
+  if (!t) {   // host removed the team, or a new game started
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    me = null; showJoin('Your team was removed. Join again.'); return;
+  }
+  const $ = id => document.getElementById(id);
+  $('nm').textContent = t.name;
+  $('sc').textContent = t.score;
+  const b = $('buzz');
+  let msg = '', enabled = false, mine = false, label = 'BUZZ';
+  const locked = s.locked.includes(me.id);
+  switch (s.phase) {
+    case 'lobby': msg = "You're in. Waiting for the game to start."; break;
+    case 'ready': msg = 'Next plate coming up'; break;
+    case 'running':
+      if (locked) msg = 'Locked out for this plate'; else { msg = '<b>Buzz when you know it!</b>'; enabled = true; }
+      break;
+    case 'buzzed':
+      if (s.buzzed === me.id) { msg = '<b>You buzzed first. Say your answer out loud!</b>'; mine = true; label = 'YOU!'; }
+      else msg = `${esc(teamName(s, s.buzzed))} buzzed in`;
+      break;
+    case 'revealed': {
+      const p = s.puzzles[s.cur] || {};
+      msg = s.result && s.result.teamId === me.id ? `<b>+${s.result.points} points!</b>` : `Answer: <b>${esc(p.answer)}</b>`;
+      break;
+    }
+    case 'speedready': case 'speed': case 'speedover':
+      msg = s.speed.teamId === me.id ? '<b>Speed round: it\'s your turn! Look at the screen.</b>' : `Speed round: ${esc(teamName(s, s.speed.teamId))}`;
+      if (s.phase === 'speedover') msg = `Speed round over: ${s.speed.count} solved`;
+      break;
+    case 'final': {
+      const rank = s.teams.filter(x => x.score > t.score).length + 1;
+      msg = rank === 1 ? '<b>You won!</b>' : `You finished #${rank}`;
+      break;
+    }
+  }
+  $('msg').innerHTML = msg;
+  b.disabled = !enabled || pending;
+  b.classList.toggle('mine', mine);
+  $('buzzLabel').textContent = label;
+  $('foot').innerHTML = PP.connected && !PP.status ? `<button id="leave">Switch team</button>` : esc(PP.status || 'Reconnecting…');
+  const lv = $('leave');
+  if (lv) lv.onclick = () => { if (confirm('Leave this team on this phone?')) { try { localStorage.removeItem(KEY); } catch (e) {} location.reload(); } };
+}
+
+PP.on(render);
+if (me && me.id) start(); else { showJoin(); if (!PP.local) PP.connect(); }
+</script>
+</body>
+</html>

@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plate Pursuit · Host</title>
+<link rel="stylesheet" href="style.css?v=2">
+</head>
+<body class="host-page">
+<div class="host">
+  <div class="host-head"><div class="sign green">PLATE PURSUIT</div><span class="note" id="join"></span>
+    <button class="btn primary" id="openDisplay">Open projector window</button></div>
+
+  <div class="card">
+    <h2 id="nowTitle">Now playing</h2>
+    <div class="h-now">
+      <div id="hPlate"></div>
+      <div>
+        <div class="h-answer" id="hAnswer"></div>
+        <div class="h-clue" id="hCat"></div>
+        <div class="h-status" id="hStatus"></div>
+        <div class="h-big" id="hBig"></div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:14px" id="controls"></div>
+  </div>
+
+  <div class="card">
+    <h2>Teams <span class="note">(join on phones, or add here)</span></h2>
+    <div class="teams" id="teams"></div>
+    <div class="row" style="margin-top:10px">
+      <input id="newTeam" class="text-in" placeholder="Add a team without a phone" style="flex:1">
+      <button class="btn" id="addTeam">Add</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Rounds</h2>
+    <div class="row">
+      <button class="btn" data-a="lobby">Show join screen</button>
+      <button class="btn primary" data-a="next">Buzz-in: next plate <kbd>N</kbd></button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <select id="speedTeam" class="btn"></select>
+      <button class="btn gold" id="speedReady">Set up speed round</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn gold" data-a="final">Show final standings</button>
+      <button class="btn bad" id="newGame">New game…</button>
+    </div>
+    <div class="progress" id="progress" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card">
+    <h2>Plates <span class="note">(click one to play it next)</span></h2>
+    <div id="plateList" style="max-height:260px;overflow:auto;font-size:14px"></div>
+  </div>
+
+  <div class="card wide">
+    <h2>Settings</h2>
+    <div class="row" id="settings"></div>
+    <h2 style="margin-top:18px">Plate list</h2>
+    <p class="note">One plate per line: <code>PLATE | answer</code>. A line starting with <code>##</code> sets the question shown above the plates that follow it (e.g. <code>## Who drives this car?</code>). Saving starts the plates over; scores are kept.</p>
+    <textarea id="puzzleText"></textarea>
+    <div class="row" style="margin-top:8px">
+      <button class="btn primary" id="savePuzzles">Save plates</button>
+      <button class="btn" id="resetPuzzles">Restore starter plates</button>
+    </div>
+  </div>
+
+  <div class="card wide">
+    <h2>Keyboard</h2>
+    <div class="keys">
+      <div><kbd>Space</kbd> show plate / start the clock / next</div>
+      <div><kbd>N</kbd> next plate</div>
+      <div><kbd>C</kbd> correct</div>
+      <div><kbd>X</kbd> wrong</div>
+      <div><kbd>R</kbd> reveal the answer (no points)</div>
+      <div><kbd>P</kbd> pass (speed round)</div>
+      <div><kbd>1</kbd>–<kbd>9</kbd> buzz in for team 1–9</div>
+    </div>
+  </div>
+</div>
+
+<script src="mode.js?v=2"></script>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="engine.js?v=2"></script>
+<script src="shared.js?v=2"></script>
+<script>
+const $ = id => document.getElementById(id);
+const act = PP.act;
+let renderedPuzzleText = null, renderedSettings = '';
+
+$('openDisplay').onclick = () => window.open('display.html' + (PP.room ? '?room=' + PP.room : ''), 'pp-display', 'width=1280,height=720');
+document.querySelectorAll('[data-a]').forEach(b => b.onclick = () => act(b.dataset.a));
+$('addTeam').onclick = () => { const n = $('newTeam').value.trim(); if (n) { act('addTeam', { name: n }); $('newTeam').value = ''; } };
+$('newTeam').onkeydown = e => { if (e.key === 'Enter') $('addTeam').click(); };
+$('speedReady').onclick = () => act('speedReady', { teamId: $('speedTeam').value });
+$('newGame').onclick = () => {
+  if (!confirm('Start a new game? Scores reset and every plate becomes unplayed.')) return;
+  act('newGame', { keepTeams: confirm('Keep the same teams?\n\nOK = keep teams (scores go to 0)\nCancel = everyone rejoins on their phone') });
+};
+$('savePuzzles').onclick = () => {
+  if (PP.state && PP.state.used.length && !confirm('Saving restarts the plate list from the top. Continue?')) return;
+  act('setPuzzles', { text: $('puzzleText').value }); renderedPuzzleText = null;
+};
+$('resetPuzzles').onclick = () => { if (confirm('Replace the plate list with the starter plates?')) { act('resetPuzzles'); renderedPuzzleText = null; } };
+
+function controlsFor(s) {
+  const B = (a, label, key, cls = '', on = true) => `<button class="btn ${cls}" data-act="${a}" ${on ? '' : 'disabled'}>${label}${key ? `<kbd>${key}</kbd>` : ''}</button>`;
+  switch (s.phase) {
+    case 'ready': return B('start', 'Show plate + start clock', 'Space', 'primary') + B('reveal', 'Skip / reveal', 'R');
+    case 'running': return B('correct', 'Correct', 'C', 'good', false) + B('wrong', 'Wrong', 'X', 'bad', false) + B('reveal', 'Reveal answer', 'R');
+    case 'buzzed': return B('correct', 'Correct', 'C', 'good') + B('wrong', 'Wrong', 'X', 'bad') + B('reveal', 'Reveal answer', 'R');
+    case 'revealed': return B('next', 'Next plate', 'N / Space', 'primary');
+    case 'speedready': return B('speedStart', 'Start 60 seconds', 'Space', 'primary');
+    case 'speed': return B('correct', 'Correct', 'C', 'good') + B('pass', 'Pass', 'P', 'bad') + B('speedStop', 'Stop clock');
+    case 'speedover': return B('next', 'Back to buzz-in plates', 'N', 'primary') + B('final', 'Final standings', '', 'gold');
+    case 'final': return B('lobby', 'Back to join screen');
+    default: return B('next', 'First plate', 'N / Space', 'primary');
+  }
+}
+
+function render(s) {
+  if (!s) { $('join').textContent = 'Not connected to the game server'; return; }
+  const p = s.puzzles[s.cur] || null;
+  const url = s.joinUrl;
+  if (PP.local) {
+    const others = s.joinUrls.slice(1).map(u => esc(u)).join(', ');
+    $('join').innerHTML = PP.connected ? `Phones join at <b>${esc(url)}</b>${others ? ` (or ${others})` : ''}<br>Local mode: phones must be on the same Wi-Fi as this Mac.` : '<b style="color:var(--red)">Lost the game server. Is it still running?</b>';
+  } else {
+    $('join').innerHTML = (PP.status ? `<b style="color:var(--red)">${esc(PP.status)}</b><br>` : '')
+      + `Room code <b class="room-code">${esc(s.room)}</b> · phones join at <b>${esc(url)}</b> `
+      + `<button class="btn mini" id="newRoom">New room code</button>`;
+    $('newRoom').onclick = () => { if (confirm('Switch to a new room code? The projector and every phone will need the new code.')) PP.newRoom(); };
+  }
+
+  const phaseNames = { lobby: 'Join screen', ready: 'Plate is covered', running: 'Clock running', buzzed: 'Buzzed in', revealed: 'Answer shown',
+    speedready: 'Speed round ready', speed: 'Speed round running', speedover: 'Speed round over', final: 'Final standings' };
+  $('nowTitle').textContent = 'Now: ' + (phaseNames[s.phase] || s.phase);
+  const showPlate = p && !['lobby', 'final', 'speedready'].includes(s.phase);
+  $('hPlate').innerHTML = plateHTML(showPlate ? p.plate : '', { cls: s.phase === 'ready' ? 'covered' : '' });
+  $('hAnswer').textContent = showPlate ? p.answer : '';
+  $('hCat').textContent = showPlate ? p.cat : '';
+  let status = '';
+  if (s.phase === 'buzzed') status = `<b>${esc(teamName(s, s.buzzed))}</b> buzzed in for ${s.valueAtBuzz} points`;
+  else if (s.phase === 'revealed' && s.result) status = `<b>${esc(teamName(s, s.result.teamId))}</b> got it for ${s.result.points}`;
+  else if (s.phase === 'revealed') status = 'Nobody scored';
+  else if (s.phase.startsWith('speed')) status = `Speed round: <b>${esc(teamName(s, s.speed.teamId))}</b> · ${s.speed.count} solved`;
+  if (s.locked.length && ['running', 'buzzed'].includes(s.phase)) status += `<div class="note">Locked out: ${s.locked.map(id => esc(teamName(s, id))).join(', ')}</div>`;
+  $('hStatus').innerHTML = status;
+  $('controls').innerHTML = controlsFor(s);
+  $('controls').querySelectorAll('[data-act]').forEach(b => b.onclick = () => act(b.dataset.act));
+
+  // teams (don't clobber a name being edited)
+  const focusedId = document.activeElement && document.activeElement.dataset.rename;
+  $('teams').innerHTML = s.teams.length ? s.teams.map((t, i) => `
+    <div class="team ${s.phase === 'buzzed' && s.buzzed === t.id ? 'buzzed' : ''} ${s.locked.includes(t.id) && ['running','buzzed'].includes(s.phase) ? 'out' : ''}">
+      <button class="btn key" data-buzz="${t.id}" title="Buzz in for this team" ${s.phase === 'running' ? '' : 'disabled'}>${i + 1}</button>
+      <div><input data-rename="${t.id}" value="${esc(t.name)}"><div class="note"><span class="dot ${s.online[t.id] ? 'on' : ''}"></span>${s.online[t.id] ? 'phone connected' : 'no phone'}</div></div>
+      <div class="score">${t.score}</div>
+      <div class="adj"><button class="btn" data-score="${t.id}" data-d="-10">−10</button><button class="btn" data-score="${t.id}" data-d="10">+10</button><button class="btn" data-remove="${t.id}" title="Remove team">✕</button></div>
+    </div>`).join('') : '<div class="note">No teams yet. Players scan the QR code on the projector.</div>';
+  $('teams').querySelectorAll('[data-buzz]').forEach(b => b.onclick = () => act('buzz', { teamId: b.dataset.buzz }));
+  $('teams').querySelectorAll('[data-score]').forEach(b => b.onclick = () => act('score', { teamId: b.dataset.score, delta: b.dataset.d }));
+  $('teams').querySelectorAll('[data-remove]').forEach(b => b.onclick = () => { if (confirm('Remove this team?')) act('removeTeam', { teamId: b.dataset.remove }); });
+  $('teams').querySelectorAll('[data-rename]').forEach(inp => {
+    inp.onchange = () => act('rename', { teamId: inp.dataset.rename, name: inp.value });
+    inp.onkeydown = e => { if (e.key === 'Enter') inp.blur(); e.stopPropagation(); };
+    if (focusedId === inp.dataset.rename) inp.focus();
+  });
+
+  const sel = $('speedTeam'), keep = sel.value;
+  sel.innerHTML = s.teams.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('') || '<option value="">(no teams)</option>';
+  if (keep && s.teams.some(t => String(t.id) === keep)) sel.value = keep;
+  $('speedReady').disabled = !s.teams.length;
+
+  $('progress').textContent = `${s.used.length} of ${s.puzzles.length} plates played`;
+  $('plateList').innerHTML = s.puzzles.map((q, i) => `<div class="pl ${i === s.cur ? 'cur' : ''} ${s.used.includes(i) ? 'used' : ''}" data-i="${i}">
+      <span class="pl-plate">${esc(q.plate)}</span> <span>${esc(q.answer)}</span></div>`).join('');
+  $('plateList').querySelectorAll('[data-i]').forEach(d => d.onclick = () => act('load', { index: d.dataset.i }));
+
+  if (renderedPuzzleText !== s.puzzleText && document.activeElement !== $('puzzleText')) { $('puzzleText').value = s.puzzleText; renderedPuzzleText = s.puzzleText; }
+  const sk = JSON.stringify(s.settings);
+  if (sk !== renderedSettings && !$('settings').contains(document.activeElement)) {
+    renderedSettings = sk;
+    const F = (k, label) => `<label class="field">${label}<input type="number" min="0" data-set="${k}" value="${s.settings[k]}" style="width:110px"></label>`;
+    $('settings').innerHTML = F('maxPoints', 'Points at start') + F('minPoints', 'Lowest points') + F('drainSeconds', 'Seconds to drain')
+      + F('speedPoints', 'Speed-round points each') + F('speedSeconds', 'Speed-round seconds');
+    $('settings').querySelectorAll('[data-set]').forEach(inp => inp.onchange = () => act('settings', { [inp.dataset.set]: inp.value }));
+  }
+}
+
+function tick() {
+  const s = PP.state; if (!s) return;
+  if (s.phase === 'running') $('hBig').textContent = ppValue(s) + ' pts';
+  else if (s.phase === 'speed') $('hBig').textContent = Math.ceil(ppSpeedLeft(s)) + 's left';
+  else $('hBig').textContent = '';
+}
+setInterval(tick, 100);
+
+document.addEventListener('keydown', e => {
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (['input', 'textarea', 'select'].includes(tag) || e.metaKey || e.ctrlKey || e.altKey) return;
+  const s = PP.state; if (!s) return;
+  const k = e.key.toLowerCase();
+  if (k === ' ') {
+    e.preventDefault();
+    if (s.phase === 'ready') act('start');
+    else if (s.phase === 'speedready') act('speedStart');
+    else if (['lobby', 'revealed'].includes(s.phase)) act('next');
+  }
+  else if (k === 'n') act('next');
+  else if (k === 'c') act('correct');
+  else if (k === 'x') act('wrong');
+  else if (k === 'r') act('reveal');
+  else if (k === 'p') act('pass');
+  else if (/^[1-9]$/.test(k)) { const t = s.teams[Number(k) - 1]; if (t) act('buzz', { teamId: t.id }); }
+});
+
+PP.on(render);
+PP.startHost();
+</script>
+</body>
+</html>
