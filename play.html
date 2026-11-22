@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0e1726">
 <title>Plate Pursuit · Buzzer</title>
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body class="phone-page">
 <div class="phone" id="app"></div>
-<script src="mode.js?v=4"></script>
+<script src="mode.js?v=6"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="shared.js?v=4"></script>
+<script src="shared.js?v=6"></script>
 <script>
 const app = document.getElementById('app');
 if (PP.needRoom('JOIN THE GAME')) throw new Error('waiting for room code');
@@ -99,8 +99,8 @@ function render(s) {
       if (locked) msg = 'Locked out for this plate'; else { msg = '<b>Buzz when you know it!</b>'; enabled = true; }
       break;
     case 'buzzed':
-      if (s.buzzed === me.id) { msg = '<b>You buzzed first. Say your answer out loud!</b>'; mine = true; label = 'YOU!'; }
-      else msg = `${esc(teamName(s, s.buzzed))} buzzed in`;
+      if (s.buzzed === me.id) { msg = '<b>You buzzed first. Say your answer out loud!</b>'; mine = true; label = s.answerEndsAt ? String(Math.ceil(ppAnswerLeft(s))) : 'YOU!'; }
+      else msg = `${esc(teamName(s, s.buzzed))} is answering`;
       break;
     case 'revealed': {
       const p = s.puzzles[s.cur] || {};
@@ -121,12 +121,15 @@ function render(s) {
   b.disabled = !enabled || pending;
   b.classList.toggle('mine', mine);
   $('buzzLabel').textContent = label;
+  $('buzz').classList.toggle('counting', mine && !!s.answerEndsAt);
   $('foot').innerHTML = PP.connected && !PP.status ? `<button id="leave">Switch team</button>` : esc(PP.status || 'Reconnecting…');
   const lv = $('leave');
   if (lv) lv.onclick = () => { if (confirm('Leave this team on this phone?')) { try { localStorage.removeItem(KEY); } catch (e) {} location.reload(); } };
 }
 
 PP.on(render);
+// tick the answer countdown on the phone that buzzed
+setInterval(() => { const s = PP.state; if (s && s.phase === 'buzzed' && me && s.buzzed === me.id && document.getElementById('buzzLabel')) document.getElementById('buzzLabel').textContent = Math.ceil(ppAnswerLeft(s)); }, 100);
 if (me && me.id) start(); else { showJoin(); if (!PP.local) PP.connect(); }
 </script>
 </body>

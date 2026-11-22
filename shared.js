@@ -248,6 +248,7 @@ function ppValue(s) {
   const t = Math.min(1, ppElapsed(s) / drainSeconds);
   return Math.max(minPoints, Math.ceil((maxPoints - (maxPoints - minPoints) * t) / 10) * 10);
 }
+function ppAnswerLeft(s) { return s.answerEndsAt ? Math.max(0, (s.answerEndsAt - PP.now()) / 1000) : null; }
 function ppFraction(s) { return Math.max(0, 1 - ppElapsed(s) / s.settings.drainSeconds); }
 function ppSpeedLeft(s) { return s.speed && s.speed.endsAt ? Math.max(0, (s.speed.endsAt - PP.now()) / 1000) : (s.settings.speedSeconds); }
 const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

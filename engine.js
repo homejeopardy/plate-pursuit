@@ -51,7 +51,7 @@ function createEngine(opts = {}) {
     return out;
   }
   
-  const DEFAULT_SETTINGS = { maxPoints: 100, minPoints: 10, drainSeconds: 20, speedPoints: 50, speedSeconds: 60 };
+  const DEFAULT_SETTINGS = { maxPoints: 100, minPoints: 10, drainSeconds: 20, answerSeconds: 5, speedPoints: 50, speedSeconds: 60 };
   
   function freshState() {
     return {
@@ -64,10 +64,11 @@ function createEngine(opts = {}) {
   }
   
   let S = freshState();
-  try { const saved = opts.load && opts.load(); if (saved) S = { ...S, ...saved }; } catch (e) {}
+  try { const saved = opts.load && opts.load(); if (saved) S = { ...S, ...saved, settings: { ...DEFAULT_SETTINGS, ...(saved.settings || {}) } }; } catch (e) {}
   S.runningSince = null;
   if (S.phase === 'running') S.phase = 'ready';
   if (S.phase === 'speed') S.phase = 'speedover';
+  setTimeout(armAnswer, 0);
   
   // ---------- engine ----------
   const now = () => Date.now();
@@ -98,10 +99,24 @@ function createEngine(opts = {}) {
     S.phase = 'speedover'; fire('timeup'); changed();
   }
   
+  // The buzzing team gets answerSeconds to answer; running out counts as wrong.
+  let answerTimer = null;
+  function armAnswer() {
+    clearTimeout(answerTimer); answerTimer = null;
+    if (S.phase !== 'buzzed') { S.answerEndsAt = null; return; }
+    if (!S.answerEndsAt) return;
+    const who = S.buzzed;
+    answerTimer = setTimeout(() => {
+      if (S.phase === 'buzzed' && S.buzzed === who) { actions.wrong(); armAnswer(); changed(); }
+    }, Math.max(0, S.answerEndsAt - now()));
+  }
+
   function buzz(teamId) {
     if (S.phase !== 'running' || !team(teamId) || S.locked.includes(teamId)) return false;
     S.valueAtBuzz = liveValue(); freeze();
     S.phase = 'buzzed'; S.buzzed = teamId; fire('buzz');
+      S.answerEndsAt = S.settings.answerSeconds > 0 ? now() + S.settings.answerSeconds * 1000 : null;
+      armAnswer();
     return true;
   }
   
@@ -184,7 +199,7 @@ function createEngine(opts = {}) {
 
   return {
     get state() { return S; },
-    act(type, data = {}) { const fn = actions[type]; if (!fn) return false; fn(data); changed(); return true; },
+    act(type, data = {}) { const fn = actions[type]; if (!fn) return false; fn(data); armAnswer(); changed(); return true; },
     join(name, teamId) {
       let t = team(Number(teamId));
       if (!t) {

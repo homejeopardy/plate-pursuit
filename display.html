@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Projector</title>
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=6">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body class="display-page">
@@ -13,13 +13,12 @@
   <div class="d-stage" id="stage"></div>
   <div class="d-teams" id="teams"></div>
 </div>
-<div class="d-banner hide" id="banner"><div class="sign yellow"><small>BUZZED IN</small><span id="bannerName"></span></div></div>
 <div class="unlock" id="unlock"><div class="sign green">Click to start the projector<small>Turns on sound and goes full screen</small></div></div>
 <div class="conn" id="conn"></div>
 
-<script src="mode.js?v=4"></script>
+<script src="mode.js?v=6"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="shared.js?v=4"></script>
+<script src="shared.js?v=6"></script>
 <script>
 const $ = id => document.getElementById(id);
 let lastEv = null, lastKey = '', lastPlateKey = '';
@@ -98,15 +97,13 @@ function renderTeams(s) {
     const cls = [s.buzzed === t.id && s.phase === 'buzzed' ? 'buzzed' : '',
       s.locked.includes(t.id) && ['running', 'buzzed'].includes(s.phase) ? 'out' : '',
       s.speed && s.speed.teamId === t.id && s.phase.startsWith('speed') ? 'active' : ''].join(' ');
-    return `<div class="sign green d-team ${cls}"><div class="n">${esc(t.name)}</div><div class="s">${t.score}</div></div>`;
+    const answering = s.phase === 'buzzed' && s.buzzed === t.id && s.answerEndsAt;
+    return `<div class="sign green d-team ${cls}"><div class="n">${esc(t.name)}</div>`
+      + `<div class="s">${t.score}${answering ? `<span class="cd" aria-label="seconds left to answer" id="cdNum"></span>` : ''}</div>`
+      + (answering ? `<i class="cd-bar" id="cdBar"></i>` : '') + `</div>`;
   }).join('');
 }
 
-function renderBanner(s) {
-  const b = $('banner');
-  if (s.phase === 'buzzed') { $('bannerName').textContent = teamName(s, s.buzzed); b.classList.remove('hide'); }
-  else b.classList.add('hide');
-}
 
 function tick() {
   const s = PP.state; if (!s) return;
@@ -122,6 +119,11 @@ function tick() {
     $('clock').classList.toggle('low', left <= 10);
   }
   if (s.phase === 'speedover' && $('clock')) $('clock').textContent = '0';
+  if (s.phase === 'buzzed' && $('cdNum')) {
+    const left = ppAnswerLeft(s);
+    $('cdNum').textContent = Math.ceil(left);
+    $('cdBar').style.width = (left / s.settings.answerSeconds * 100) + '%';
+  }
 }
 setInterval(tick, 100);
 
@@ -133,7 +135,7 @@ PP.on(s => {
   else if (s.ev.n !== lastEv) { lastEv = s.ev.n; SFX.play(s.ev.type); }
   const k = stageKey(s);
   if (k !== lastKey) { lastKey = k; renderStage(s); }
-  renderTeams(s); renderBanner(s); tick();
+  renderTeams(s); tick();
 });
 PP.connect();
 </script>
