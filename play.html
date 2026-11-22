@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0e1726">
 <title>Plate Pursuit · Buzzer</title>
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=3">
 </head>
 <body class="phone-page">
 <div class="phone" id="app"></div>
-<script src="mode.js?v=2"></script>
+<script src="mode.js?v=3"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="shared.js?v=2"></script>
+<script src="shared.js?v=3"></script>
 <script>
 const app = document.getElementById('app');
 if (PP.needRoom('JOIN THE GAME')) throw new Error('waiting for room code');
@@ -20,25 +20,45 @@ let me = null;
 try { me = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
 let pending = false, lastBuzzMine = false;
 
-function showJoin(msg) {
+let joining = false;
+function showJoin(msg, keepName = '') {
+  joining = false;
   app.innerHTML = `<div class="p-join">
     <div class="p-plate">${plateHTML('PL8 PRST')}</div>
     <h1>JOIN THE GAME</h1>
-    <input id="name" maxlength="24" placeholder="Team name" autocomplete="off">
+    ${PP.room ? `<div class="p-small">Room <b class="room-code">${esc(PP.room)}</b> · <button id="otherRoom">different room</button></div>` : ''}
+    <input id="name" maxlength="24" placeholder="Team name" autocomplete="off" value="${esc(keepName)}">
     <button class="btn primary" id="go">Join</button>
-    <div class="p-small">${msg || 'Everyone on a team can use one phone.'}</div></div>`;
+    <div class="p-status ${msg ? 'bad' : ''}" id="jstatus">${esc(msg || '')}</div>
+    <div class="p-small">Everyone on a team can use one phone.</div></div>`;
   const go = async () => {
+    if (joining) return;
     const name = document.getElementById('name').value.trim();
     if (!name) return document.getElementById('name').focus();
+    joining = true;
+    const btn = document.getElementById('go');
+    btn.disabled = true; btn.textContent = 'Joining…';
+    joinStatus();
     const r = await PP.post('/join', { name });
-    if (!r.ok) return showJoin(PP.local ? "Couldn't reach the game. Are you on the same Wi-Fi?" : "Couldn't reach the game. " + (PP.status || 'Check the room code and try again.'));
+    if (!r.ok) return showJoin(PP.local ? "Couldn't reach the game. Is this phone on the same Wi-Fi as the host's computer?"
+      : (PP.status || "Couldn't reach the host. Check the room code and try again."), name);
     me = { id: r.team.id };
     try { localStorage.setItem(KEY, JSON.stringify(me)); } catch (e) {}
     start();
   };
   document.getElementById('go').onclick = go;
   document.getElementById('name').onkeydown = e => { if (e.key === 'Enter') go(); };
+  const other = document.getElementById('otherRoom');
+  if (other) other.onclick = () => { location.search = ''; };
 }
+// While joining, show what the connection is doing instead of a silent button.
+function joinStatus() {
+  const el = document.getElementById('jstatus');
+  if (!el || !joining) return;
+  el.className = 'p-status';
+  el.textContent = PP.status || 'Connecting to the host…';
+}
+PP.on(joinStatus);
 
 function start() {
   app.innerHTML = `<div class="p-top"><div class="sign green p-name" id="nm"></div><div class="p-score" id="sc"></div></div>
