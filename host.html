@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Host</title>
-<link rel="stylesheet" href="style.css?v=12">
+<link rel="stylesheet" href="style.css?v=13">
 </head>
 <body class="host-page">
 <div class="host">
@@ -84,10 +84,10 @@
   </div>
 </div>
 
-<script src="mode.js?v=12"></script>
+<script src="mode.js?v=13"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="engine.js?v=12"></script>
-<script src="shared.js?v=12"></script>
+<script src="engine.js?v=13"></script>
+<script src="shared.js?v=13"></script>
 <script>
 const $ = id => document.getElementById(id);
 const act = PP.act;
@@ -119,8 +119,12 @@ function phaseControls(s, B) {
     case 'running': return B('correct', 'Correct', 'C', 'good', false) + B('wrong', 'Wrong', 'X', 'bad', false) + B('reveal', 'Reveal answer', 'R');
     case 'buzzed': return B('correct', 'Correct', 'C', 'good') + B('wrong', 'Wrong', 'X', 'bad') + B('reveal', 'Reveal answer', 'R');
     case 'paused': return B('reopen', 'Reopen buzzers', 'Space', 'primary') + B('reveal', 'Reveal answer', 'R');
-    case 'revealed': return s.tb ? B('tiebreak', 'Another tie-breaker plate', '', 'primary') + B('final', 'Final standings', '', 'gold')
-      : B('next', 'Next plate', 'N / Space', 'primary');
+    case 'revealed': {
+      const left = s.puzzles.length - s.used.length;   // the plate just played is already counted as used
+      if (s.tb) return B('tiebreak', 'Another tie-breaker plate', '', 'primary', left > 0) + B('final', 'Final standings', left > 0 ? '' : 'Space', 'gold');
+      return left > 0 ? B('next', 'Next plate', 'N / Space', 'primary')
+        : `<span class="note">That was the last plate.</span>` + B('final', 'Final standings', 'Space', 'gold');
+    }
     case 'fwager': return B('finalShow', 'Show final plate', 'Space', 'primary');
     case 'fanswer': return B('finalLock', 'Stop answers now', '', 'primary');
     case 'fjudge': return B('final', 'Final standings', '', 'gold');
@@ -250,6 +254,7 @@ document.addEventListener('keydown', e => {
     else if (s.phase === 'paused') act('reopen');
     else if (s.phase === 'fwager') act('finalShow');
     else if (s.phase === 'speedready') act('speedStart');
+    else if (s.phase === 'revealed' && s.used.length >= s.puzzles.length) act('final');   // no plates left
     else if (['lobby', 'revealed'].includes(s.phase)) act('next');
   }
   else if (k === 'u') act('undo');
