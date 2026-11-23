@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Host</title>
-<link rel="stylesheet" href="style.css?v=15">
+<link rel="stylesheet" href="style.css?v=16">
 </head>
 <body class="host-page">
 <div class="host">
@@ -62,7 +62,7 @@
     <h2>Settings</h2>
     <div class="row" id="settings"></div>
     <h2 style="margin-top:18px">Plate list</h2>
-    <p class="note">One plate per line: <code>PLATE | answer</code>. Add <code>| x2</code> at the end for double points (or click 2× in the plate list). To colour-match the plate to the answer when it's revealed, add the pieces in order: <code>L8 AGAIN | Late again | L8=Late, AGAIN=again</code>. Pieces that are the same get the same colour. A clue shown under the question: <code>| hint: On a cow-print car</code>. A line starting with <code>##</code> sets the question shown above the plates that follow it (e.g. <code>## Who drives this car?</code>). Saving starts the plates over; scores are kept.</p>
+    <p class="note">One plate per line: <code>PLATE | answer</code>. Add <code>| x2</code> at the end for double points (or click 2× in the plate list). To colour-match the plate to the answer when it's revealed, add the pieces in order: <code>L8 AGAIN | Late again | L8=Late, AGAIN=again</code>. Pieces that are the same get the same colour. A clue shown under the question: <code>| hint: On a cow-print car</code>. A line starting with <code>##</code> sets the question shown above the plates that follow it (e.g. <code>## Who drives this car?</code>), for plates that ask a different question. Saving starts the plates over; scores are kept.</p>
     <textarea id="puzzleText"></textarea>
     <div class="row" style="margin-top:8px">
       <button class="btn primary" id="savePuzzles">Save plates</button>
@@ -85,10 +85,10 @@
   </div>
 </div>
 
-<script src="mode.js?v=15"></script>
+<script src="mode.js?v=16"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="engine.js?v=15"></script>
-<script src="shared.js?v=15"></script>
+<script src="engine.js?v=16"></script>
+<script src="shared.js?v=16"></script>
 <script>
 const $ = id => document.getElementById(id);
 const act = PP.act;

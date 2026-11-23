@@ -43,19 +43,7 @@ function createEngine(opts = {}) {
   PB N J | Peanut butter and jelly | P=Peanut, B=butter, N=and, J=jelly
   H8 TRAFC | I hate traffic | H8=hate, TRAFC=traffic
   XCELLNT | Excellent | X=Ex, CELL=cell, NT=ent
-  2MUCH2DO | Too much to do | 2=Too, MUCH=much, 2=to, DO=do
-  
-  ## Who drives this car?
-  PI R2 | A math teacher (πr²) | PI=π, R2=r²
-  E MC2 | A science teacher (E=mc²) | E=E, MC2=mc²
-  2TH FXR | A dentist (tooth fixer) | 2TH=tooth, FXR=fixer
-  IC 2020 | An eye doctor (I see 20/20) | I=I, C=see, 2020=20/20
-  RX 4 U | A pharmacist (prescription for you) | RX=prescription, 4=for, U=you
-  4 PAWS | A vet
-  EIEIO | A farmer (Old MacDonald)
-  ARRRR | A pirate
-  MOO2U | A dairy farmer (moo to you) | MOO=moo, 2=to, U=you
-  OUI OUI | A French teacher (yes, yes) | OUI=yes, OUI=yes`;
+  2MUCH2DO | Too much to do | 2=Too, MUCH=much, 2=to, DO=do`;
   
   // "PLATE | answer | x2" marks a double-points plate
   const isDouble = f => /^(x2|2x|double)$/i.test(String(f).trim());
@@ -167,6 +155,30 @@ function createEngine(opts = {}) {
     S.used = usedPlates.map(idx).filter(i => i >= 0);
     S.cur = curPlate != null && idx(curPlate) >= 0 ? idx(curPlate) : null;
     setTimeout(() => opts.persist && opts.persist(S), 0);
+  }
+  // 2026-11-23: the user dropped the "Who drives this car?" plates. Take the starter ones out of saved games
+  // (plates the host typed in themselves stay), keeping which plates were played.
+  {
+    const GONE = ['PI R2', 'E MC2', '2TH FXR', 'IC 2020', 'RX 4 U', '4 PAWS', 'EIEIO', 'ARRRR', 'MOO2U', 'OUI OUI'];
+    const lines = String(S.puzzleText || '').split('\n');
+    const isGone = l => { const f = l.trim(); return !f.startsWith('#') && GONE.includes(f.split('|')[0].trim().toUpperCase()); };
+    if (lines.some(isGone)) {
+      const plateAt = i => (S.puzzles[i] || {}).plate;
+      const usedPlates = S.used.map(plateAt), curPlate = plateAt(S.cur);
+      let kept = lines.filter(l => !isGone(l));
+      // drop a "## Who drives this car?" header with nothing left under it
+      kept = kept.filter((l, i) => !(/^\s*##\s*Who drives this car\?\s*$/i.test(l) && !kept.slice(i + 1).some(x => x.trim() && !x.trim().startsWith('#'))));
+      while (kept.length && !kept[kept.length - 1].trim()) kept.pop();
+      const p = parsePuzzles(kept.join('\n'));
+      if (p.length) {
+        S.puzzleText = kept.join('\n'); S.puzzles = p;
+        const idx = pl => S.puzzles.findIndex(q => q.plate === pl);
+        S.used = usedPlates.map(idx).filter(i => i >= 0);
+        S.cur = curPlate != null && idx(curPlate) >= 0 ? idx(curPlate) : null;
+        if (S.cur == null && !['lobby', 'final'].includes(S.phase)) S.phase = 'lobby';
+        setTimeout(() => opts.persist && opts.persist(S), 0);
+      }
+    }
   }
   // Saved lists from before plate pieces were coloured: add the starter mapping to starter lines that have none.
   {
