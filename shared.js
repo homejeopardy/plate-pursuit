@@ -63,6 +63,8 @@ const PP = (() => {
     if (msg.teamId) seen[msg.teamId] = Date.now();
     if (msg.kind === 'join') { const t = engine.join(msg.name, msg.teamId); seen[t.id] = Date.now(); r.team = t; broadcast(); }
     else if (msg.kind === 'buzz') r.won = engine.buzz(msg.teamId);
+    else if (msg.kind === 'wager') r = engine.wager(msg.teamId, msg.amount);
+    else if (msg.kind === 'answer') r = engine.answer(msg.teamId, msg.text);
     else if (msg.kind === 'hello') { broadcast(); return; }
     else if (msg.kind === 'bye') { broadcast(); return; }
     if (msg.id != null) client.publish(topic('res/' + msg.cid), enc({ reply: msg.id, ...r }), { qos: 1 });
@@ -214,6 +216,8 @@ const PP = (() => {
       if (LOCAL) return httpPost(url, data);
       if (url === '/join') return request('join', data);
       if (url === '/buzz') return request('buzz', data);
+      if (url === '/wager') return request('wager', data);
+      if (url === '/answer') return request('answer', data);
       return Promise.resolve({ ok: false });
     },
     act(type, data) {
@@ -248,6 +252,20 @@ function ppValue(s) {
   const t = Math.min(1, ppElapsed(s) / drainSeconds);
   return Math.max(minPoints, Math.ceil((maxPoints - (maxPoints - minPoints) * t) / 10) * 10);
 }
+// Final ranking: by score, and a tie-breaker winner goes ahead of the teams they tied with.
+function ppRanking(s) {
+  if (!s.teams.length) return [];
+  const top = Math.max(...s.teams.map(t => t.score));
+  const tbw = s.teams.some(t => t.id === s.tbWinner && t.score === top) ? s.tbWinner : null;
+  const ahead = (o, t) => o.score > t.score || (o.score === t.score && o.id === tbw && t.id !== tbw);
+  return [...s.teams].sort((a, b) => b.score - a.score || (a.id === tbw ? -1 : b.id === tbw ? 1 : 0))
+    .map(t => ({ team: t, rank: 1 + s.teams.filter(o => o !== t && ahead(o, t)).length }));
+}
+function ppTiedTop(s) {
+  const r = ppRanking(s).filter(x => x.rank === 1);
+  return r.length > 1 ? r.map(x => x.team.id) : [];
+}
+function ppFinalLeft(s) { return s.fin && s.fin.endsAt ? Math.max(0, (s.fin.endsAt - PP.now()) / 1000) : null; }
 function ppAnswerLeft(s) { return s.answerEndsAt ? Math.max(0, (s.answerEndsAt - PP.now()) / 1000) : null; }
 function ppFraction(s) { return Math.max(0, 1 - ppElapsed(s) / s.settings.drainSeconds); }
 function ppSpeedLeft(s) { return s.speed && s.speed.endsAt ? Math.max(0, (s.speed.endsAt - PP.now()) / 1000) : (s.settings.speedSeconds); }

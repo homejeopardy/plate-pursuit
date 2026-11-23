@@ -263,3 +263,25 @@ body.landing-page { background: var(--paper); color: var(--ink); }
 .limit.answer { --sign-bg: var(--yellow); background: var(--yellow); box-shadow: inset 0 0 0 .5vh var(--yellow), inset 0 0 0 .9vh var(--black); transition: opacity .2s; }
 .limit.answer.idle { opacity: .25; }
 .p-buzz.counting span { font-size: 30vw; }
+.fin-table { border-collapse: collapse; margin-top: 8px; width: 100%; font-size: 15px; }
+.fin-table td { padding: 6px 8px 5px 0; border-top: 1px solid var(--rule); vertical-align: middle; }
+.fin-table tr.right td { background: #d9efdc; }
+.fin-table tr.wrongrow td { background: #f4d8d6; }
+.fin-table .score-cell { font: 900 18px/1 var(--font); text-align: right; }
+.d-hint { font: 800 3.4vh/1.2 var(--font); color: #e9e4d8; }
+.d-team .sub { font: 700 2.2vh/1.2 var(--font); margin-top: .4vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .9; }
+.d-team .sub .plus { color: var(--yellow); }
+.d-team .sub .minus { color: #ffb3b3; }
+.d-team.buzzed .sub .plus, .d-team.buzzed .sub .minus { color: var(--black); }
+.p-final { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 12px; max-width: 420px; width: 100%; margin: 0 auto; }
+.p-final[hidden], .p-buzz-wrap[hidden] { display: none; }
+.p-final input { font: 800 26px var(--font); padding: 14px; border-radius: 6px; border: 3px solid var(--black); background: var(--white); color: var(--black); text-align: center; }
+.p-final .btn { font-size: 20px; padding: 14px; }
+.p-label { font-size: 15px; color: #c9c4b8; }
+.p-cd { font: 900 64px/1 var(--font); color: var(--yellow); font-variant-numeric: tabular-nums; }
+.p-answer { font: 900 28px/1.2 var(--font); }
+.p-result { font: 900 30px/1.2 var(--font); padding: 14px; border-radius: 8px; background: #3a3a3a; }
+.p-result.good { background: #1d7a3e; }
+.p-result.bad { background: var(--red); }
+.d-board { width: min(76vw, 110vh); }
+.d-board .tag { font-size: .42em; letter-spacing: .12em; vertical-align: .35em; margin-right: .8vw; background: var(--yellow); color: var(--black); padding: .5vh .7vw .2vh; border-radius: .6vh; }

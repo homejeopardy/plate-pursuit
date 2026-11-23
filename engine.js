@@ -2,7 +2,8 @@
 // and in the host page on the website, so both modes play identically.
 (function (root) {
 function createEngine(opts = {}) {
-  const changed = () => { opts.persist && opts.persist(S); opts.onChange && opts.onChange(); };
+  const changed = () => { S.undoLabel = history.length ? history[history.length - 1].label : null; opts.persist && opts.persist(S); opts.onChange && opts.onChange(); };
+  const history = [];   // undo stack (in memory only)
   const DEFAULT_PUZZLES = `## What does it say?
   EZ PZ | Easy peasy
   XLR8 | Accelerate
@@ -50,7 +51,7 @@ function createEngine(opts = {}) {
     return out;
   }
   
-  const DEFAULT_SETTINGS = { maxPoints: 100, minPoints: 10, drainSeconds: 20, answerSeconds: 5, speedPoints: 50, speedSeconds: 60 };
+  const DEFAULT_SETTINGS = { maxPoints: 100, minPoints: 10, drainSeconds: 20, answerSeconds: 5, speedPoints: 50, speedSeconds: 60, finalSeconds: 30 };
   
   function freshState() {
     return {
@@ -59,15 +60,17 @@ function createEngine(opts = {}) {
       used: [], cur: null, elapsed: 0, runningSince: null,
       buzzed: null, locked: [], valueAtBuzz: 0, result: null,
       speed: null, settings: { ...DEFAULT_SETTINGS }, ev: { n: 0, type: null },
+      fin: null, tb: null, tbWinner: null, undoLabel: null,
     };
   }
   
   let S = freshState();
   try { const saved = opts.load && opts.load(); if (saved) S = { ...S, ...saved, settings: { ...DEFAULT_SETTINGS, ...(saved.settings || {}) } }; } catch (e) {}
-  S.runningSince = null;
+  S.runningSince = null; S.undoLabel = null;
+  if (S.phase === 'fanswer' && S.fin) S.fin.endsAt = Date.now() + 10000;   // reloaded mid-answer: give 10 more seconds
   if (S.phase === 'running') S.phase = 'ready';
   if (S.phase === 'speed') S.phase = 'speedover';
-  setTimeout(armAnswer, 0);
+  setTimeout(() => rearmTimers(), 0);
   // The "UR2SLO | You are too slow" plate read like the game mocking a team that ran out of time,
   // so it's gone from the starter list. Take it out of saved games too, keeping which plates were played.
   if (/^\s*UR2SLO\s*\|\s*You are too slow\s*$/mi.test(S.puzzleText || '')) {
@@ -119,8 +122,58 @@ function createEngine(opts = {}) {
     if (!S.answerEndsAt) return;
     const who = S.buzzed;
     answerTimer = setTimeout(() => {
-      if (S.phase === 'buzzed' && S.buzzed === who) { actions.wrong(); armAnswer(); changed(); }
+      if (S.phase === 'buzzed' && S.buzzed === who) { record('timeout'); actions.wrong(); armAnswer(); changed(); }
     }, Math.max(0, S.answerEndsAt - now()));
+  }
+
+  // ---------- undo ----------
+  const UNDO_LABELS = { next: 'Next plate', load: 'Pick plate', start: 'Start clock', buzz: 'Buzz-in', correct: 'Correct', wrong: 'Wrong',
+    timeout: 'Time ran out', reopen: 'Reopen buzzing', reveal: 'Reveal', pass: 'Pass', speedReady: 'Set up speed round',
+    speedStart: 'Start speed round', speedStop: 'Stop speed round', final: 'Final standings', lobby: 'Join screen',
+    score: 'Score change', removeTeam: 'Remove team', finalStart: 'Final wager plate', finalShow: 'Show final plate',
+    finalLock: 'Lock answers', finalMark: 'Mark final answer', tiebreak: 'Tie-breaker plate' };
+  function record(type) {
+    if (!UNDO_LABELS[type]) return false;
+    const c = JSON.parse(JSON.stringify(S));
+    c.elapsed = elapsedNow(); c._running = !!S.runningSince; c.runningSince = null;
+    if (S.speed && S.speed.endsAt) c._speedLeft = Math.max(0, S.speed.endsAt - now());
+    if (S.fin && S.fin.endsAt) c._finLeft = Math.max(0, S.fin.endsAt - now());
+    history.push({ label: UNDO_LABELS[type], state: c, json: JSON.stringify(S) });
+    if (history.length > 40) history.shift();
+    return true;
+  }
+  // drop the entry if the action turned out to change nothing
+  function unrecordIfSame() { const h = history[history.length - 1]; if (h && h.json === JSON.stringify(S)) history.pop(); }
+  function undo() {
+    const h = history.pop(); if (!h) return;
+    const c = h.state, ev = S.ev;
+    if (c._running) c.runningSince = now();
+    if (c._speedLeft != null && c.speed) c.speed.endsAt = now() + c._speedLeft;
+    if (c._finLeft != null && c.fin) c.fin.endsAt = now() + c._finLeft;
+    delete c._running; delete c._speedLeft; delete c._finLeft;
+    if (c.phase === 'buzzed' && c.settings.answerSeconds > 0) c.answerEndsAt = now() + c.settings.answerSeconds * 1000;
+    S = c; S.ev = { n: ev.n + 1, type: null };   // no sound for an undo
+    rearmTimers();
+  }
+  let finTimer = null;
+  function rearmTimers() {
+    armAnswer();
+    clearTimeout(speedTimer); speedTimer = null;
+    if (S.phase === 'speed' && S.speed && S.speed.endsAt) speedTimer = setTimeout(endSpeed, Math.max(0, S.speed.endsAt - now()));
+    clearTimeout(finTimer); finTimer = null;
+    if (S.phase === 'fanswer' && S.fin && S.fin.endsAt)
+      finTimer = setTimeout(() => { if (S.phase === 'fanswer') { record('finalLock'); actions.finalLock(); changed(); } }, Math.max(0, S.fin.endsAt - now()));
+  }
+  function finalScore(id) {
+    const f = S.fin, t = team(id); if (!f || !t || f.base[id] == null) return;
+    const w = f.wagers[id] || 0, m = f.marks[id];
+    t.score = f.base[id] + (m === true ? w : m === false ? -w : 0);
+  }
+  function tiedTop() {
+    if (S.teams.length < 2) return [];
+    const top = Math.max(...S.teams.map(t => t.score));
+    const tied = S.teams.filter(t => t.score === top).map(t => t.id);
+    return tied.length > 1 && !tied.includes(S.tbWinner) ? tied : [];
   }
 
   function buzz(teamId) {
@@ -133,12 +186,15 @@ function createEngine(opts = {}) {
   }
   
   const actions = {
-    next() { loadPlate(nextUnused(S.cur)); },
-    load({ index }) { loadPlate(Number(index)); },
+    next() { S.tb = null; loadPlate(nextUnused(S.cur)); },
+    load({ index }) { S.tb = null; loadPlate(Number(index)); },
     start() { if (S.phase === 'ready') { S.phase = 'running'; S.runningSince = now(); fire('start'); } },
     buzz({ teamId }) { buzz(Number(teamId)); },
     correct() {
-      if (S.phase === 'buzzed') {
+      if (S.phase === 'buzzed' && S.tb) {          // tie-breaker: first right answer wins, no points
+        S.tbWinner = S.buzzed; S.result = { teamId: S.buzzed, points: 0, tiebreak: true };
+        markUsed(S.cur); S.phase = 'revealed'; fire('correct');
+      } else if (S.phase === 'buzzed') {
         const t = team(S.buzzed); if (t) t.score += S.valueAtBuzz;
         S.result = { teamId: S.buzzed, points: S.valueAtBuzz };
         markUsed(S.cur); S.phase = 'revealed'; fire('correct');
@@ -151,7 +207,7 @@ function createEngine(opts = {}) {
     wrong() {
       if (S.phase !== 'buzzed') return;
       S.locked.push(S.buzzed); S.buzzed = null;
-      if (S.teams.every(t => S.locked.includes(t.id))) { markUsed(S.cur); S.phase = 'revealed'; S.result = null; }
+      if (S.teams.every(t => S.locked.includes(t.id))) { markUsed(S.cur); S.phase = 'revealed'; S.result = null; }   // (tie-breaker: other teams start locked)
       else S.phase = 'paused';      // buzzers stay closed until the host reopens them
       fire('wrong');
     },
@@ -176,7 +232,39 @@ function createEngine(opts = {}) {
       clearTimeout(speedTimer); speedTimer = setTimeout(endSpeed, S.settings.speedSeconds * 1000);
     },
     speedStop() { endSpeed(); },
-    final() { freeze(); S.phase = 'final'; fire('winner'); },
+    final() { freeze(); clearTimeout(finTimer); S.tb = null; S.buzzed = null; S.phase = 'final'; fire('winner'); },
+    // ---- final wager plate: everyone bets, everyone types an answer, the host marks each one
+    finalStart() {
+      const i = nextUnused(S.cur); if (i == null) return;
+      freeze(); S.cur = i; S.buzzed = null; S.locked = []; S.result = null; S.tb = null;
+      S.fin = { wagers: {}, answers: {}, marks: {}, base: {}, endsAt: null };
+      S.phase = 'fwager'; fire('start');
+    },
+    finalShow() {
+      if (S.phase !== 'fwager') return;
+      for (const t of S.teams) { S.fin.base[t.id] = t.score; S.fin.wagers[t.id] = Math.min(S.fin.wagers[t.id] || 0, Math.max(0, t.score)); }
+      S.fin.endsAt = S.settings.finalSeconds > 0 ? now() + S.settings.finalSeconds * 1000 : null;
+      S.phase = 'fanswer'; fire('start');
+    },
+    finalLock() {
+      if (S.phase !== 'fanswer') return;
+      S.fin.endsAt = null; markUsed(S.cur); S.phase = 'fjudge'; fire('reveal');
+    },
+    finalMark({ teamId, right }) {
+      if (S.phase !== 'fjudge') return;
+      const id = Number(teamId), r = right === true || right === 'true';
+      if (S.fin.marks[id] === r) delete S.fin.marks[id]; else S.fin.marks[id] = r;   // tap again to unmark
+      finalScore(id); fire(r ? 'correct' : 'wrong');
+    },
+    // ---- tie-breaker: only the teams tied for first can buzz
+    tiebreak() {
+      if (!(S.phase === 'final' || (S.tb && S.phase === 'revealed'))) return;
+      const tied = S.tb && S.phase === 'revealed' ? S.tb.teams : tiedTop();
+      if (tied.length < 2) return;
+      const i = nextUnused(S.cur); if (i == null) return;
+      loadPlate(i); S.tb = { teams: tied }; S.tbWinner = null;
+      S.locked = S.teams.filter(t => !tied.includes(t.id)).map(t => t.id);
+    },
     lobby() { freeze(); S.phase = 'lobby'; },
     score({ teamId, delta }) { const t = team(Number(teamId)); if (t) t.score += Number(delta) || 0; },
     rename({ teamId, name }) { const t = team(Number(teamId)); if (t && String(name).trim()) t.name = String(name).trim().slice(0, 24); },
@@ -196,7 +284,7 @@ function createEngine(opts = {}) {
       if (S.settings.drainSeconds < 1) S.settings.drainSeconds = 1;
     },
     newGame({ keepTeams } = {}) {
-      clearTimeout(speedTimer);
+      clearTimeout(speedTimer); clearTimeout(finTimer); history.length = 0;
       const keep = { teams: keepTeams ? S.teams.map(t => ({ ...t, score: 0 })) : [], nextTeamId: S.nextTeamId,
         puzzleText: S.puzzleText, puzzles: S.puzzles, settings: S.settings, ev: S.ev };
       S = { ...freshState(), ...keep };
@@ -212,7 +300,28 @@ function createEngine(opts = {}) {
 
   return {
     get state() { return S; },
-    act(type, data = {}) { const fn = actions[type]; if (!fn) return false; fn(data); armAnswer(); changed(); return true; },
+    act(type, data = {}) {
+      if (type === 'undo') { undo(); changed(); return true; }
+      const fn = actions[type]; if (!fn) return false;
+      const rec = record(type);
+      fn(data);
+      if (rec) unrecordIfSame();
+      rearmTimers();
+      changed(); return true;
+    },
+    wager(teamId, amount) {
+      const t = team(Number(teamId));
+      if (S.phase !== 'fwager' || !t) return { ok: false };
+      const max = Math.max(0, t.score);
+      S.fin.wagers[t.id] = Math.max(0, Math.min(max, Math.round(Number(amount) || 0)));
+      changed(); return { ok: true, amount: S.fin.wagers[t.id], max };
+    },
+    answer(teamId, text) {
+      const t = team(Number(teamId));
+      if (S.phase !== 'fanswer' || !t) return { ok: false };
+      S.fin.answers[t.id] = String(text || '').trim().slice(0, 60);
+      changed(); return { ok: true };
+    },
     join(name, teamId) {
       let t = team(Number(teamId));
       if (!t) {
@@ -222,7 +331,7 @@ function createEngine(opts = {}) {
       }
       return t;
     },
-    buzz(teamId) { const won = buzz(Number(teamId)); if (won) changed(); return won; },
+    buzz(teamId) { record('buzz'); const won = buzz(Number(teamId)); if (won) changed(); else history.pop(); return won; },
   };
 }
 if (typeof module !== 'undefined' && module.exports) module.exports = { createEngine };

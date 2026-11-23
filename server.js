@@ -70,6 +70,14 @@ http.createServer(async (req, res) => {
     const b = await body(req);
     return json(res, { ok: true, team: engine.join(b.name, b.teamId) });
   }
+  if (req.method === 'POST' && p === '/wager') {
+    const b = await body(req);
+    return json(res, engine.wager(b.teamId, b.amount));
+  }
+  if (req.method === 'POST' && p === '/answer') {
+    const b = await body(req);
+    return json(res, engine.answer(b.teamId, b.text));
+  }
   if (req.method === 'POST' && p === '/buzz') {
     const b = await body(req);
     return json(res, { ok: true, won: engine.buzz(b.teamId) });

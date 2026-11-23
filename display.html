@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Projector</title>
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=10">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body class="display-page">
@@ -16,9 +16,9 @@
 <div class="unlock" id="unlock"><div class="sign green">Click to start the projector<small>Turns on sound and goes full screen</small></div></div>
 <div class="conn" id="conn"></div>
 
-<script src="mode.js?v=8"></script>
+<script src="mode.js?v=10"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="shared.js?v=8"></script>
+<script src="shared.js?v=10"></script>
 <script>
 const $ = id => document.getElementById(id);
 let lastEv = null, lastKey = '', lastPlateKey = '';
@@ -31,7 +31,7 @@ $('unlock').onclick = () => {
 
 function stageKey(s) {
   // Re-render the stage only when what it shows changes; the clock ticks separately.
-  return JSON.stringify([s.phase, s.cur, s.buzzed, s.result, s.speed && s.speed.count, s.joinUrl, s.room, s.teams.map(t => t.name)]);
+  return JSON.stringify([s.phase, s.cur, s.buzzed, s.result, s.speed && s.speed.count, s.joinUrl, s.room, s.teams.map(t => t.name), s.tb, s.tbWinner, s.fin && s.fin.marks, s.phase === 'final' ? s.teams.map(t => t.score) : 0]);
 }
 
 function renderStage(s) {
@@ -57,11 +57,21 @@ function renderStage(s) {
     return;
   }
   if (s.phase === 'final') {
-    const ranked = [...s.teams].sort((a, b) => b.score - a.score);
-    const top = ranked.length ? ranked[0].score : 0;
+    const ranked = ppRanking(s);
+    const firsts = ranked.filter(r => r.rank === 1).length;
     html = `<div class="sign green d-board"><div class="h">FINAL STANDINGS</div>
-      ${ranked.map(t => `<div class="rank ${t.score === top ? 'top' : ''}"><span>${t.score === top ? 'WINNER: ' : (ranked.findIndex(x => x.score === t.score) + 1) + '. '}${esc(t.name)}</span><span>${t.score}</span></div>`).join('')}</div>`;
+      ${ranked.map(r => `<div class="rank ${r.rank === 1 ? 'top' : ''}"><span>${r.rank === 1 ? `<small class="tag">${firsts > 1 ? 'TIED' : 'WINNER'}</small>` : r.rank + '. '}${esc(r.team.name)}</span><span>${r.team.score}</span></div>`).join('')}</div>`;
     st.innerHTML = html; return;
+  }
+  if (s.phase === 'fwager' || s.phase === 'fanswer' || s.phase === 'fjudge') {
+    const showing = s.phase !== 'fwager';
+    const under = s.phase === 'fwager' ? `<div class="d-hint">Place your bet on your phone</div>`
+      : s.phase === 'fanswer' ? `<div class="limit answer" id="answerSign"><div class="t">ANSWER</div><div class="n" id="answerNum"></div></div><div class="d-hint">Type your answer on your phone</div>`
+      : `<div class="d-answer">${esc(p.answer)}</div>`;
+    html = `<div class="d-q"><div class="count">Final plate</div><div class="q">${esc(p.cat || '')}</div></div>
+      <div class="d-plate ${s.phase === 'fanswer' && enter !== '' ? 'enter' : ''}">${plateHTML(showing ? p.plate : 'BET NOW', { cls: showing ? '' : 'covered' })}</div>
+      <div class="d-under">${under}</div>`;
+    st.innerHTML = html; tick(); return;
   }
   if (s.phase === 'speedready') {
     html = `<div class="d-q"><div class="count">${Math.round(s.settings.speedSeconds)}-second speed round</div><div class="q">${esc(teamName(s, s.speed.teamId))}, get ready</div></div>
@@ -81,10 +91,11 @@ function renderStage(s) {
   const showAnswer = s.phase === 'revealed';
   const lane = Array.from({ length: 10 }, () => '<i></i>').join('');
   const under = showAnswer
-    ? `<div><div class="d-answer">${esc(p.answer)}</div>${s.result ? `<div class="d-result">+${s.result.points} to ${esc(teamName(s, s.result.teamId))}</div>` : ''}</div>`
+    ? `<div><div class="d-answer">${esc(p.answer)}</div>${s.result ? `<div class="d-result">${s.result.tiebreak ? esc(teamName(s, s.result.teamId)) + ' wins the tie-breaker' : '+' + s.result.points + ' to ' + esc(teamName(s, s.result.teamId))}</div>` : ''}</div>`
     : `<div class="limit"><div class="t">WORTH</div><div class="n" id="value"></div></div><div class="lane" id="lane">${lane}</div>`
       + `<div class="limit answer ${s.phase === 'buzzed' && s.answerEndsAt ? '' : 'idle'}" id="answerSign"><div class="t" id="answerLabel">ANSWER</div><div class="n" id="answerNum">${s.settings.answerSeconds || ''}</div></div>`;
-  html = `<div class="d-q"><div class="count">Plate ${s.used.length + (showAnswer ? 0 : 1)} of ${s.puzzles.length}</div><div class="q">${esc(p.cat || '')}</div></div>
+  const countLine = s.tb ? 'Tie-breaker: ' + s.tb.teams.map(id => esc(teamName(s, id))).join(' vs ') : `Plate ${s.used.length + (showAnswer ? 0 : 1)} of ${s.puzzles.length}`;
+  html = `<div class="d-q"><div class="count">${countLine}</div><div class="q">${esc(p.cat || '')}</div></div>
     <div class="d-plate ${enter}">${plateHTML(covered ? '?' : p.plate, { cls: covered ? 'covered' : '' })}</div>
     <div class="d-under">${under}</div>`;
   st.innerHTML = html; tick();
@@ -92,13 +103,21 @@ function renderStage(s) {
 
 function renderTeams(s) {
   const roundNames = { lobby: '', ready: 'Buzz-in round', running: 'Buzz-in round', buzzed: 'Buzz-in round', paused: 'Buzz-in round', revealed: 'Buzz-in round',
-    speedready: 'Speed round', speed: 'Speed round', speedover: 'Speed round', final: 'Game over' };
-  $('round').textContent = roundNames[s.phase] || '';
+    speedready: 'Speed round', speed: 'Speed round', speedover: 'Speed round', final: 'Game over',
+    fwager: 'Final plate', fanswer: 'Final plate', fjudge: 'Final plate' };
+  $('round').textContent = s.tb && !['final', 'lobby'].includes(s.phase) ? 'Tie-breaker' : (roundNames[s.phase] || '');
   $('teams').innerHTML = s.teams.map(t => {
     const cls = [s.buzzed === t.id && s.phase === 'buzzed' ? 'buzzed' : '',
-      s.locked.includes(t.id) && ['running', 'buzzed', 'paused'].includes(s.phase) ? 'out' : '',
+      s.locked.includes(t.id) && (['running', 'buzzed', 'paused'].includes(s.phase) || (s.tb && s.phase === 'ready')) ? 'out' : '',
       s.speed && s.speed.teamId === t.id && s.phase.startsWith('speed') ? 'active' : ''].join(' ');
-    return `<div class="sign green d-team ${cls}"><div class="n">${esc(t.name)}</div><div class="s">${t.score}</div></div>`;
+    let sub = '';
+    if (s.fin && s.phase === 'fwager') sub = s.fin.wagers[t.id] != null ? 'BET IN' : 'betting…';
+    else if (s.fin && s.phase === 'fanswer') sub = s.fin.answers[t.id] != null ? 'ANSWERED' : 'typing…';
+    else if (s.fin && s.phase === 'fjudge') {
+      const m = s.fin.marks[t.id], w = s.fin.wagers[t.id] || 0;
+      sub = esc(s.fin.answers[t.id] || '(no answer)') + (m === true ? ` <b class="plus">+${w}</b>` : m === false ? ` <b class="minus">−${w}</b>` : '');
+    }
+    return `<div class="sign green d-team ${cls}"><div class="n">${esc(t.name)}</div><div class="s">${t.score}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
   }).join('');
 }
 
@@ -117,7 +136,10 @@ function tick() {
     $('clock').classList.toggle('low', left <= 10);
   }
   if (s.phase === 'speedover' && $('clock')) $('clock').textContent = '0';
-  if ($('answerNum')) {
+  if (s.phase === 'fanswer' && $('answerNum')) {
+    const left = ppFinalLeft(s);
+    $('answerNum').textContent = left == null ? '' : Math.ceil(left);
+  } else if ($('answerNum')) {
     const counting = s.phase === 'buzzed' && s.answerEndsAt;
     $('answerSign').classList.toggle('idle', !counting);
     $('answerNum').textContent = counting ? Math.ceil(ppAnswerLeft(s)) : (s.settings.answerSeconds || '');

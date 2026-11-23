@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Host</title>
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body class="host-page">
 <div class="host">
@@ -45,6 +45,7 @@
       <button class="btn gold" id="speedReady">Set up speed round</button>
     </div>
     <div class="row" style="margin-top:10px">
+      <button class="btn gold" data-a="finalStart" id="finalStartBtn">Final wager plate</button>
       <button class="btn gold" data-a="final">Show final standings</button>
       <button class="btn bad" id="newGame">New game…</button>
     </div>
@@ -77,15 +78,16 @@
       <div><kbd>X</kbd> wrong</div>
       <div><kbd>R</kbd> reveal the answer (no points)</div>
       <div><kbd>P</kbd> pass (speed round)</div>
+      <div><kbd>U</kbd> undo the last action</div>
       <div><kbd>1</kbd>–<kbd>9</kbd> buzz in for team 1–9</div>
     </div>
   </div>
 </div>
 
-<script src="mode.js?v=8"></script>
+<script src="mode.js?v=10"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="engine.js?v=8"></script>
-<script src="shared.js?v=8"></script>
+<script src="engine.js?v=10"></script>
+<script src="shared.js?v=10"></script>
 <script>
 const $ = id => document.getElementById(id);
 const act = PP.act;
@@ -108,18 +110,42 @@ $('resetPuzzles').onclick = () => { if (confirm('Replace the plate list with the
 
 function controlsFor(s) {
   const B = (a, label, key, cls = '', on = true) => `<button class="btn ${cls}" data-act="${a}" ${on ? '' : 'disabled'}>${label}${key ? `<kbd>${key}</kbd>` : ''}</button>`;
+  const undo = `<button class="btn" data-act="undo" ${s.undoLabel ? '' : 'disabled'} title="Undo the last action">Undo${s.undoLabel ? ': ' + esc(s.undoLabel) : ''}<kbd>U</kbd></button>`;
+  return phaseControls(s, B) + undo;
+}
+function phaseControls(s, B) {
   switch (s.phase) {
     case 'ready': return B('start', 'Show plate + start clock', 'Space', 'primary') + B('reveal', 'Skip / reveal', 'R');
     case 'running': return B('correct', 'Correct', 'C', 'good', false) + B('wrong', 'Wrong', 'X', 'bad', false) + B('reveal', 'Reveal answer', 'R');
     case 'buzzed': return B('correct', 'Correct', 'C', 'good') + B('wrong', 'Wrong', 'X', 'bad') + B('reveal', 'Reveal answer', 'R');
     case 'paused': return B('reopen', 'Reopen buzzers', 'Space', 'primary') + B('reveal', 'Reveal answer', 'R');
-    case 'revealed': return B('next', 'Next plate', 'N / Space', 'primary');
+    case 'revealed': return s.tb ? B('tiebreak', 'Another tie-breaker plate', '', 'primary') + B('final', 'Final standings', '', 'gold')
+      : B('next', 'Next plate', 'N / Space', 'primary');
+    case 'fwager': return B('finalShow', 'Show final plate', 'Space', 'primary');
+    case 'fanswer': return B('finalLock', 'Stop answers now', '', 'primary');
+    case 'fjudge': return B('final', 'Final standings', '', 'gold');
     case 'speedready': return B('speedStart', 'Start 60 seconds', 'Space', 'primary');
     case 'speed': return B('correct', 'Correct', 'C', 'good') + B('pass', 'Pass', 'P', 'bad') + B('speedStop', 'Stop clock');
     case 'speedover': return B('next', 'Back to buzz-in plates', 'N', 'primary') + B('final', 'Final standings', '', 'gold');
-    case 'final': return B('lobby', 'Back to join screen');
+    case 'final': return (ppTiedTop(s).length ? B('tiebreak', 'Tie-breaker plate', '', 'primary') : '') + B('lobby', 'Back to join screen');
     default: return B('next', 'First plate', 'N / Space', 'primary');
   }
+}
+
+// The final plate on the host page: bets, then answers, then right/wrong buttons per team.
+function finalPanel(s) {
+  const f = s.fin;
+  const rows = s.teams.map(t => {
+    const w = f.wagers[t.id], a = f.answers[t.id], m = f.marks[t.id];
+    if (s.phase === 'fwager') return `<tr><td>${esc(t.name)}</td><td>${w != null ? 'bet <b>' + w + '</b>' : '<span class="note">no bet yet</span>'}</td><td class="note">of ${Math.max(0, t.score)}</td></tr>`;
+    if (s.phase === 'fanswer') return `<tr><td>${esc(t.name)}</td><td>bet ${w || 0}</td><td>${a != null ? '<b>' + esc(a || '(blank)') + '</b>' : '<span class="note">typing…</span>'}</td></tr>`;
+    return `<tr class="${m === true ? 'right' : m === false ? 'wrongrow' : ''}"><td>${esc(t.name)}</td><td><b>${esc(a || '(no answer)')}</b></td><td>bet ${w || 0}</td>
+      <td><button class="btn mini good" data-mark="${t.id}" data-right="1">${m === true ? '✓ Right' : 'Right'}</button>
+      <button class="btn mini bad" data-mark="${t.id}" data-right="0">${m === false ? '✗ Wrong' : 'Wrong'}</button></td><td class="score-cell">${t.score}</td></tr>`;
+  }).join('');
+  const head = s.phase === 'fwager' ? 'Teams bet on their phones (0 up to their score). Show the plate when everyone is in; no bet counts as 0.'
+    : s.phase === 'fanswer' ? 'Teams type their answers on their phones.' : 'Mark each team. Right adds their bet, wrong takes it away. Tap again to unmark.';
+  return `<div class="note">${head}</div><table class="fin-table">${rows}</table>`;
 }
 
 function render(s) {
@@ -137,7 +163,8 @@ function render(s) {
   }
 
   const phaseNames = { lobby: 'Join screen', ready: 'Plate is covered', running: 'Clock running', buzzed: 'Buzzed in', paused: 'Waiting for you to reopen buzzing', revealed: 'Answer shown',
-    speedready: 'Speed round ready', speed: 'Speed round running', speedover: 'Speed round over', final: 'Final standings' };
+    speedready: 'Speed round ready', speed: 'Speed round running', speedover: 'Speed round over', final: 'Final standings',
+    fwager: 'Final plate: teams are betting', fanswer: 'Final plate: teams are typing answers', fjudge: 'Final plate: mark each answer' };
   $('nowTitle').textContent = 'Now: ' + (phaseNames[s.phase] || s.phase);
   const showPlate = p && !['lobby', 'final', 'speedready'].includes(s.phase);
   $('hPlate').innerHTML = plateHTML(showPlate ? p.plate : '', { cls: s.phase === 'ready' ? 'covered' : '' });
@@ -148,8 +175,14 @@ function render(s) {
   else if (s.phase === 'revealed' && s.result) status = `<b>${esc(teamName(s, s.result.teamId))}</b> got it for ${s.result.points}`;
   else if (s.phase === 'revealed') status = 'Nobody scored';
   else if (s.phase.startsWith('speed')) status = `Speed round: <b>${esc(teamName(s, s.speed.teamId))}</b> · ${s.speed.count} solved`;
-  if (s.locked.length && ['running', 'buzzed', 'paused'].includes(s.phase)) status += `<div class="note">Locked out: ${s.locked.map(id => esc(teamName(s, id))).join(', ')}</div>`;
+  if (s.tb && ['ready', 'running', 'buzzed', 'paused', 'revealed'].includes(s.phase))
+    status = `<div class="note"><b>Tie-breaker:</b> ${s.tb.teams.map(id => esc(teamName(s, id))).join(' vs ')}. No points; first right answer wins.</div>` + status;
+  if (s.phase === 'revealed' && s.result && s.result.tiebreak) status = `<b>${esc(teamName(s, s.result.teamId))}</b> wins the tie-breaker`;
+  if (s.fin && ['fwager', 'fanswer', 'fjudge'].includes(s.phase)) status = finalPanel(s);
+  if (!s.tb && s.locked.length && ['running', 'buzzed', 'paused'].includes(s.phase)) status += `<div class="note">Locked out: ${s.locked.map(id => esc(teamName(s, id))).join(', ')}</div>`;
   $('hStatus').innerHTML = status;
+  $('hStatus').querySelectorAll('[data-mark]').forEach(b => b.onclick = () => act('finalMark', { teamId: b.dataset.mark, right: b.dataset.right === '1' }));
+  $('finalStartBtn').disabled = s.used.length >= s.puzzles.length || !s.teams.length;
   $('controls').innerHTML = controlsFor(s);
   $('controls').querySelectorAll('[data-act]').forEach(b => b.onclick = () => act(b.dataset.act));
 
@@ -187,7 +220,7 @@ function render(s) {
     renderedSettings = sk;
     const F = (k, label) => `<label class="field">${label}<input type="number" min="0" data-set="${k}" value="${s.settings[k]}" style="width:110px"></label>`;
     $('settings').innerHTML = F('maxPoints', 'Points at start') + F('minPoints', 'Lowest points') + F('drainSeconds', 'Seconds to drain') + F('answerSeconds', 'Seconds to answer (0 = no limit)')
-      + F('speedPoints', 'Speed-round points each') + F('speedSeconds', 'Speed-round seconds');
+      + F('speedPoints', 'Speed-round points each') + F('speedSeconds', 'Speed-round seconds') + F('finalSeconds', 'Final plate: seconds to type');
     $('settings').querySelectorAll('[data-set]').forEach(inp => inp.onchange = () => act('settings', { [inp.dataset.set]: inp.value }));
   }
 }
@@ -198,6 +231,7 @@ function tick() {
   else if (s.phase === 'speed') $('hBig').textContent = Math.ceil(ppSpeedLeft(s)) + 's left';
   else if (s.phase === 'paused') $('hBig').textContent = 'Paused at ' + ppValue(s) + ' pts';
   else if (s.phase === 'buzzed' && s.answerEndsAt) $('hBig').textContent = Math.ceil(ppAnswerLeft(s)) + 's to answer';
+  else if (s.phase === 'fanswer' && s.fin.endsAt) $('hBig').textContent = Math.ceil(ppFinalLeft(s)) + 's to answer';
   else $('hBig').textContent = '';
 }
 setInterval(tick, 100);
@@ -211,9 +245,11 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     if (s.phase === 'ready') act('start');
     else if (s.phase === 'paused') act('reopen');
+    else if (s.phase === 'fwager') act('finalShow');
     else if (s.phase === 'speedready') act('speedStart');
     else if (['lobby', 'revealed'].includes(s.phase)) act('next');
   }
+  else if (k === 'u') act('undo');
   else if (k === 'n') act('next');
   else if (k === 'c') act('correct');
   else if (k === 'x') act('wrong');
