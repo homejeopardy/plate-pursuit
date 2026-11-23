@@ -37,6 +37,21 @@ function createEngine(opts = {}) {
   MOO2U | A dairy farmer (moo to you)
   OUI OUI | A French teacher (yes, yes)`;
   
+  // "PLATE | answer | x2" marks a double-points plate
+  const isDouble = f => /^(x2|2x|double)$/i.test(String(f).trim());
+  // Rewrite the n-th plate line of the list so it does (or doesn't) end in "| x2", keeping everything else.
+  function setDoubleInText(text, n, on) {
+    let k = -1;
+    return String(text).split('\n').map(raw => {
+      const l = raw.trim();
+      if (!l || l.startsWith('#')) return raw;
+      const parts = l.split('|').map(x => x.trim());
+      if (!parts[0] || ++k !== n) return raw;
+      const base = [parts[0], parts[1] || ''].concat(parts.slice(2).filter(f => !isDouble(f)));
+      const indent = raw.match(/^\s*/)[0];
+      return indent + base.join(' | ') + (on ? ' | x2' : '');
+    }).join('\n');
+  }
   function parsePuzzles(text) {
     let cat = 'What does it say?';
     const out = [];
@@ -45,12 +60,14 @@ function createEngine(opts = {}) {
       if (!l) continue;
       if (l.startsWith('##')) { cat = l.replace(/^#+/, '').trim() || cat; continue; }
       if (l.startsWith('#')) continue;
-      const [plate, answer = ''] = l.split('|').map(s => s.trim());
-      if (plate) out.push({ cat, plate: plate.toUpperCase().slice(0, 10), answer });
+      const [plate, answer = '', flag = ''] = l.split('|').map(s => s.trim());
+      if (plate) out.push({ cat, plate: plate.toUpperCase().slice(0, 10), answer, ...(isDouble(flag) ? { double: true } : {}) });
     }
     return out;
   }
   
+  // Team colours (keys; shared.js maps them to paint). Yellow is left out: it marks the team answering.
+  const COLORS = ['red', 'blue', 'orange', 'purple', 'teal', 'pink', 'green', 'brown'];
   const DEFAULT_SETTINGS = { maxPoints: 100, minPoints: 10, drainSeconds: 20, answerSeconds: 5, speedPoints: 50, speedSeconds: 60, finalSeconds: 30 };
   
   function freshState() {
@@ -71,6 +88,7 @@ function createEngine(opts = {}) {
   if (S.phase === 'running') S.phase = 'ready';
   if (S.phase === 'speed') S.phase = 'speedover';
   setTimeout(() => rearmTimers(), 0);
+  for (const t of S.teams) if (!COLORS.includes(t.color)) t.color = freeColor();   // games saved before colours
   // The "UR2SLO | You are too slow" plate read like the game mocking a team that ran out of time,
   // so it's gone from the starter list. Take it out of saved games too, keeping which plates were played.
   if (/^\s*UR2SLO\s*\|\s*You are too slow\s*$/mi.test(S.puzzleText || '')) {
@@ -92,7 +110,8 @@ function createEngine(opts = {}) {
   function liveValue() {
     const { maxPoints, minPoints, drainSeconds } = S.settings;
     const t = Math.min(1, elapsedNow() / drainSeconds);
-    return Math.max(minPoints, Math.ceil((maxPoints - (maxPoints - minPoints) * t) / 10) * 10);
+    const v = Math.max(minPoints, Math.ceil((maxPoints - (maxPoints - minPoints) * t) / 10) * 10);
+    return (S.puzzles[S.cur] || {}).double ? v * 2 : v;
   }
   function freeze() { S.elapsed = elapsedNow(); S.runningSince = null; }
   function markUsed(i) { if (i != null && !S.used.includes(i)) S.used.push(i); }
@@ -130,7 +149,7 @@ function createEngine(opts = {}) {
   const UNDO_LABELS = { next: 'Next plate', load: 'Pick plate', start: 'Start clock', buzz: 'Buzz-in', correct: 'Correct', wrong: 'Wrong',
     timeout: 'Time ran out', reopen: 'Reopen buzzing', reveal: 'Reveal', pass: 'Pass', speedReady: 'Set up speed round',
     speedStart: 'Start speed round', speedStop: 'Stop speed round', final: 'Final standings', lobby: 'Join screen',
-    score: 'Score change', removeTeam: 'Remove team', finalStart: 'Final wager plate', finalShow: 'Show final plate',
+    score: 'Score change', toggleDouble: 'Double points', removeTeam: 'Remove team', finalStart: 'Final wager plate', finalShow: 'Show final plate',
     finalLock: 'Lock answers', finalMark: 'Mark final answer', tiebreak: 'Tie-breaker plate' };
   function record(type) {
     if (!UNDO_LABELS[type]) return false;
@@ -269,6 +288,12 @@ function createEngine(opts = {}) {
     score({ teamId, delta }) { const t = team(Number(teamId)); if (t) t.score += Number(delta) || 0; },
     rename({ teamId, name }) { const t = team(Number(teamId)); if (t && String(name).trim()) t.name = String(name).trim().slice(0, 24); },
     addTeam({ name }) { addTeam(name); },
+    color({ teamId, color }) { const t = team(Number(teamId)); if (t && COLORS.includes(color)) t.color = color; },
+    toggleDouble({ index }) {
+      const i = Number(index), q = S.puzzles[i]; if (!q) return;
+      if (q.double) delete q.double; else q.double = true;
+      S.puzzleText = setDoubleInText(S.puzzleText, i, !!q.double);
+    },
     removeTeam({ teamId }) { S.teams = S.teams.filter(t => t.id !== Number(teamId)); },
     setPuzzles({ text }) {
       const p = parsePuzzles(text); if (!p.length) return;
@@ -291,9 +316,13 @@ function createEngine(opts = {}) {
     },
   };
   
+  function freeColor() {
+    const used = S.teams.map(t => t.color);
+    return COLORS.find(c => !used.includes(c)) || COLORS[S.teams.length % COLORS.length];
+  }
   function addTeam(name) {
     name = String(name || '').trim().slice(0, 24) || `Team ${S.nextTeamId}`;
-    const t = { id: S.nextTeamId++, name, score: 0 };
+    const t = { id: S.nextTeamId++, name, score: 0, color: freeColor() };
     S.teams.push(t);
     return t;
   }
@@ -321,6 +350,13 @@ function createEngine(opts = {}) {
       if (S.phase !== 'fanswer' || !t) return { ok: false };
       S.fin.answers[t.id] = String(text || '').trim().slice(0, 60);
       changed(); return { ok: true };
+    },
+    // a phone picks its colour; two teams can't share one
+    color(teamId, color) {
+      const t = team(Number(teamId));
+      if (!t || !COLORS.includes(color)) return { ok: false };
+      if (S.teams.some(o => o !== t && o.color === color)) return { ok: false, taken: true };
+      t.color = color; changed(); return { ok: true };
     },
     join(name, teamId) {
       let t = team(Number(teamId));

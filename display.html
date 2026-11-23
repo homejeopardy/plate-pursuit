@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Projector</title>
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=11">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body class="display-page">
@@ -16,9 +16,9 @@
 <div class="unlock" id="unlock"><div class="sign green">Click to start the projector<small>Turns on sound and goes full screen</small></div></div>
 <div class="conn" id="conn"></div>
 
-<script src="mode.js?v=10"></script>
+<script src="mode.js?v=11"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="shared.js?v=10"></script>
+<script src="shared.js?v=11"></script>
 <script>
 const $ = id => document.getElementById(id);
 let lastEv = null, lastKey = '', lastPlateKey = '';
@@ -31,9 +31,10 @@ $('unlock').onclick = () => {
 
 function stageKey(s) {
   // Re-render the stage only when what it shows changes; the clock ticks separately.
-  return JSON.stringify([s.phase, s.cur, s.buzzed, s.result, s.speed && s.speed.count, s.joinUrl, s.room, s.teams.map(t => t.name), s.tb, s.tbWinner, s.fin && s.fin.marks, s.phase === 'final' ? s.teams.map(t => t.score) : 0]);
+  return JSON.stringify([s.phase, s.cur, s.buzzed, s.result, s.speed && s.speed.count, s.joinUrl, s.room, s.teams.map(t => t.name + t.color), !!p_double(s), s.tb, s.tbWinner, s.fin && s.fin.marks, s.phase === 'final' ? s.teams.map(t => t.score) : 0]);
 }
 
+const p_double = s => (s.puzzles[s.cur] || {}).double && ['ready', 'running', 'buzzed', 'paused', 'revealed'].includes(s.phase) && !s.tb;
 function renderStage(s) {
   const p = s.puzzles[s.cur] || {};
   const st = $('stage');
@@ -60,7 +61,7 @@ function renderStage(s) {
     const ranked = ppRanking(s);
     const firsts = ranked.filter(r => r.rank === 1).length;
     html = `<div class="sign green d-board"><div class="h">FINAL STANDINGS</div>
-      ${ranked.map(r => `<div class="rank ${r.rank === 1 ? 'top' : ''}"><span>${r.rank === 1 ? `<small class="tag">${firsts > 1 ? 'TIED' : 'WINNER'}</small>` : r.rank + '. '}${esc(r.team.name)}</span><span>${r.team.score}</span></div>`).join('')}</div>`;
+      ${ranked.map(r => `<div class="rank ${r.rank === 1 ? 'top' : ''}"><span><i class="swatch" style="${teamStyle(r.team)}"></i>${r.rank === 1 ? `<small class="tag">${firsts > 1 ? 'TIED' : 'WINNER'}</small>` : r.rank + '. '}${esc(r.team.name)}</span><span>${r.team.score}</span></div>`).join('')}</div>`;
     st.innerHTML = html; return;
   }
   if (s.phase === 'fwager' || s.phase === 'fanswer' || s.phase === 'fjudge') {
@@ -94,9 +95,10 @@ function renderStage(s) {
     ? `<div><div class="d-answer">${esc(p.answer)}</div>${s.result ? `<div class="d-result">${s.result.tiebreak ? esc(teamName(s, s.result.teamId)) + ' wins the tie-breaker' : '+' + s.result.points + ' to ' + esc(teamName(s, s.result.teamId))}</div>` : ''}</div>`
     : `<div class="limit"><div class="t">WORTH</div><div class="n" id="value"></div></div><div class="lane" id="lane">${lane}</div>`
       + `<div class="limit answer ${s.phase === 'buzzed' && s.answerEndsAt ? '' : 'idle'}" id="answerSign"><div class="t" id="answerLabel">ANSWER</div><div class="n" id="answerNum">${s.settings.answerSeconds || ''}</div></div>`;
+  const dbl = p_double(s);
   const countLine = s.tb ? 'Tie-breaker: ' + s.tb.teams.map(id => esc(teamName(s, id))).join(' vs ') : `Plate ${s.used.length + (showAnswer ? 0 : 1)} of ${s.puzzles.length}`;
-  html = `<div class="d-q"><div class="count">${countLine}</div><div class="q">${esc(p.cat || '')}</div></div>
-    <div class="d-plate ${enter}">${plateHTML(covered ? '?' : p.plate, { cls: covered ? 'covered' : '' })}</div>
+  html = `<div class="d-q"><div class="count">${countLine}${dbl ? ' <span class="d-double">Double points</span>' : ''}</div><div class="q">${esc(p.cat || '')}</div></div>
+    <div class="d-plate ${enter}">${plateHTML(covered ? (dbl ? 'DOUBLE' : '?') : p.plate, { cls: covered ? 'covered' + (dbl ? ' double' : '') : '' })}</div>
     <div class="d-under">${under}</div>`;
   st.innerHTML = html; tick();
 }
@@ -117,7 +119,7 @@ function renderTeams(s) {
       const m = s.fin.marks[t.id], w = s.fin.wagers[t.id] || 0;
       sub = esc(s.fin.answers[t.id] || '(no answer)') + (m === true ? ` <b class="plus">+${w}</b>` : m === false ? ` <b class="minus">−${w}</b>` : '');
     }
-    return `<div class="sign green d-team ${cls}"><div class="n">${esc(t.name)}</div><div class="s">${t.score}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
+    return `<div class="sign green d-team ${cls}" style="${teamStyle(t)}"><div class="n">${esc(t.name)}</div><div class="s">${t.score}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
   }).join('');
 }
 

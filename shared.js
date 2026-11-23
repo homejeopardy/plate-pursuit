@@ -65,6 +65,7 @@ const PP = (() => {
     else if (msg.kind === 'buzz') r.won = engine.buzz(msg.teamId);
     else if (msg.kind === 'wager') r = engine.wager(msg.teamId, msg.amount);
     else if (msg.kind === 'answer') r = engine.answer(msg.teamId, msg.text);
+    else if (msg.kind === 'color') r = engine.color(msg.teamId, msg.color);
     else if (msg.kind === 'hello') { broadcast(); return; }
     else if (msg.kind === 'bye') { broadcast(); return; }
     if (msg.id != null) client.publish(topic('res/' + msg.cid), enc({ reply: msg.id, ...r }), { qos: 1 });
@@ -218,6 +219,7 @@ const PP = (() => {
       if (url === '/buzz') return request('buzz', data);
       if (url === '/wager') return request('wager', data);
       if (url === '/answer') return request('answer', data);
+      if (url === '/color') return request('color', data);
       return Promise.resolve({ ok: false });
     },
     act(type, data) {
@@ -250,8 +252,13 @@ function ppElapsed(s) { return s.elapsed + (s.runningSince ? (PP.now() - s.runni
 function ppValue(s) {
   const { maxPoints, minPoints, drainSeconds } = s.settings;
   const t = Math.min(1, ppElapsed(s) / drainSeconds);
-  return Math.max(minPoints, Math.ceil((maxPoints - (maxPoints - minPoints) * t) / 10) * 10);
+  const v = Math.max(minPoints, Math.ceil((maxPoints - (maxPoints - minPoints) * t) / 10) * 10);
+  return (s.puzzles[s.cur] || {}).double && !String(s.phase).startsWith('speed') ? v * 2 : v;
 }
+// Team colours: the engine stores the key, pages paint it.
+const TEAM_COLORS = { red: '#c8322a', blue: '#2563c9', orange: '#e07a10', purple: '#7a45c2', teal: '#0f8f86', pink: '#d6417f', green: '#0f6b3e', brown: '#8a5a2b' };
+const teamColor = t => TEAM_COLORS[t && t.color] || TEAM_COLORS.green;
+const teamStyle = t => `--team:${teamColor(t)}`;
 // Final ranking: by score, and a tie-breaker winner goes ahead of the teams they tied with.
 function ppRanking(s) {
   if (!s.teams.length) return [];

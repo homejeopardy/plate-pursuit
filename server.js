@@ -74,6 +74,10 @@ http.createServer(async (req, res) => {
     const b = await body(req);
     return json(res, engine.wager(b.teamId, b.amount));
   }
+  if (req.method === 'POST' && p === '/color') {
+    const b = await body(req);
+    return json(res, engine.color(b.teamId, b.color));
+  }
   if (req.method === 'POST' && p === '/answer') {
     const b = await body(req);
     return json(res, engine.answer(b.teamId, b.text));

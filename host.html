@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Host</title>
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=11">
 </head>
 <body class="host-page">
 <div class="host">
@@ -53,7 +53,7 @@
   </div>
 
   <div class="card">
-    <h2>Plates <span class="note">(click one to play it next)</span></h2>
+    <h2>Plates <span class="note">(click one to play it next; 2× makes it worth double)</span></h2>
     <div id="plateList" style="max-height:260px;overflow:auto;font-size:14px"></div>
   </div>
 
@@ -61,7 +61,7 @@
     <h2>Settings</h2>
     <div class="row" id="settings"></div>
     <h2 style="margin-top:18px">Plate list</h2>
-    <p class="note">One plate per line: <code>PLATE | answer</code>. A line starting with <code>##</code> sets the question shown above the plates that follow it (e.g. <code>## Who drives this car?</code>). Saving starts the plates over; scores are kept.</p>
+    <p class="note">One plate per line: <code>PLATE | answer</code>. Add <code>| x2</code> at the end for double points (or click 2× in the plate list). A line starting with <code>##</code> sets the question shown above the plates that follow it (e.g. <code>## Who drives this car?</code>). Saving starts the plates over; scores are kept.</p>
     <textarea id="puzzleText"></textarea>
     <div class="row" style="margin-top:8px">
       <button class="btn primary" id="savePuzzles">Save plates</button>
@@ -84,10 +84,10 @@
   </div>
 </div>
 
-<script src="mode.js?v=10"></script>
+<script src="mode.js?v=11"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="engine.js?v=10"></script>
-<script src="shared.js?v=10"></script>
+<script src="engine.js?v=11"></script>
+<script src="shared.js?v=11"></script>
 <script>
 const $ = id => document.getElementById(id);
 const act = PP.act;
@@ -169,7 +169,7 @@ function render(s) {
   const showPlate = p && !['lobby', 'final', 'speedready'].includes(s.phase);
   $('hPlate').innerHTML = plateHTML(showPlate ? p.plate : '', { cls: s.phase === 'ready' ? 'covered' : '' });
   $('hAnswer').textContent = showPlate ? p.answer : '';
-  $('hCat').textContent = showPlate ? p.cat : '';
+  $('hCat').innerHTML = showPlate ? esc(p.cat) + (p.double && !s.tb ? ' <span class="h-double">Double points</span>' : '') : '';
   let status = '';
   if (s.phase === 'buzzed') status = `<b>${esc(teamName(s, s.buzzed))}</b> buzzed in for ${s.valueAtBuzz} points`;
   else if (s.phase === 'revealed' && s.result) status = `<b>${esc(teamName(s, s.result.teamId))}</b> got it for ${s.result.points}`;
@@ -190,13 +190,14 @@ function render(s) {
   const focusedId = document.activeElement && document.activeElement.dataset.rename;
   $('teams').innerHTML = s.teams.length ? s.teams.map((t, i) => `
     <div class="team ${s.phase === 'buzzed' && s.buzzed === t.id ? 'buzzed' : ''} ${s.locked.includes(t.id) && ['running','buzzed','paused'].includes(s.phase) ? 'out' : ''}">
-      <button class="btn key" data-buzz="${t.id}" title="Buzz in for this team" ${s.phase === 'running' ? '' : 'disabled'}>${i + 1}</button>
+      <button class="btn key" data-buzz="${t.id}" title="Buzz in for this team" style="${teamStyle(t)}" ${s.phase === 'running' ? '' : 'disabled'}>${i + 1}</button>
       <div><input data-rename="${t.id}" value="${esc(t.name)}"><div class="note"><span class="dot ${s.online[t.id] ? 'on' : ''}"></span>${s.online[t.id] ? 'phone connected' : 'no phone'}</div></div>
       <div class="score">${t.score}</div>
-      <div class="adj"><button class="btn" data-score="${t.id}" data-d="-10">−10</button><button class="btn" data-score="${t.id}" data-d="10">+10</button><button class="btn" data-remove="${t.id}" title="Remove team">✕</button></div>
+      <div class="adj"><select class="btn color-sel" data-color="${t.id}" title="Team color" style="${teamStyle(t)}">${Object.keys(TEAM_COLORS).map(c => `<option value="${c}" ${c === t.color ? 'selected' : ''}>${c}</option>`).join('')}</select><button class="btn" data-score="${t.id}" data-d="-10">−10</button><button class="btn" data-score="${t.id}" data-d="10">+10</button><button class="btn" data-remove="${t.id}" title="Remove team">✕</button></div>
     </div>`).join('') : '<div class="note">No teams yet. Players scan the QR code on the projector.</div>';
   $('teams').querySelectorAll('[data-buzz]').forEach(b => b.onclick = () => act('buzz', { teamId: b.dataset.buzz }));
   $('teams').querySelectorAll('[data-score]').forEach(b => b.onclick = () => act('score', { teamId: b.dataset.score, delta: b.dataset.d }));
+  $('teams').querySelectorAll('[data-color]').forEach(sel => { sel.onchange = () => act('color', { teamId: sel.dataset.color, color: sel.value }); sel.onkeydown = e => e.stopPropagation(); });
   $('teams').querySelectorAll('[data-remove]').forEach(b => b.onclick = () => { if (confirm('Remove this team?')) act('removeTeam', { teamId: b.dataset.remove }); });
   $('teams').querySelectorAll('[data-rename]').forEach(inp => {
     inp.onchange = () => act('rename', { teamId: inp.dataset.rename, name: inp.value });
@@ -211,8 +212,10 @@ function render(s) {
 
   $('progress').textContent = `${s.used.length} of ${s.puzzles.length} plates played`;
   $('plateList').innerHTML = s.puzzles.map((q, i) => `<div class="pl ${i === s.cur ? 'cur' : ''} ${s.used.includes(i) ? 'used' : ''}" data-i="${i}">
-      <span class="pl-plate">${esc(q.plate)}</span> <span>${esc(q.answer)}</span></div>`).join('');
+      <span class="pl-plate">${esc(q.plate)}</span> <span class="pl-ans">${esc(q.answer)}</span>
+      <button class="pl-x2 ${q.double ? 'on' : ''}" data-x2="${i}" title="${q.double ? 'Double points (click to turn off)' : 'Make this a double-points plate'}">2×</button></div>`).join('');
   $('plateList').querySelectorAll('[data-i]').forEach(d => d.onclick = () => act('load', { index: d.dataset.i }));
+  $('plateList').querySelectorAll('[data-x2]').forEach(b => b.onclick = e => { e.stopPropagation(); act('toggleDouble', { index: b.dataset.x2 }); });
 
   if (renderedPuzzleText !== s.puzzleText && document.activeElement !== $('puzzleText')) { $('puzzleText').value = s.puzzleText; renderedPuzzleText = s.puzzleText; }
   const sk = JSON.stringify(s.settings);
