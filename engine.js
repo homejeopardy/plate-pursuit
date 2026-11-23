@@ -24,6 +24,26 @@ function createEngine(opts = {}) {
   SK8 4EVR | Skate forever | SK8=Skate, 4=for, EVR=ever
   OWE NO1 | Owe no one | OWE=Owe, NO=no, 1=one
   Y B L8 | Why be late? | Y=Why, B=be, L8=late
+  BCNU | Be seeing you | B=Be, C=see, N=ing, U=you
+  XQZIT | Exquisite | X=Ex, Q=qui, ZIT=site
+  MT POCKT | Empty pocket | MT=Empty, POCKT=pocket
+  XPNSV | Expensive | X=Ex, PN=pen, SV=sive
+  AV8R | Aviator | AV=Avi, 8=at, R=or
+  GR8FUL | Grateful | GR8=Grate, FUL=ful
+  2B1ASK1 | To be one, ask one | 2=To, B=be, 1=one, ASK=ask, 1=one
+  10TATIV | Tentative | 10=Ten, TATIV=tative
+  CU@ BCH | See you at the beach | C=See, U=you, @=at, BCH=beach
+  MOOV OVR | Move over | hint: On a cow-print car | MOOV=Move, OVR=over
+  ENUF SNO | Enough snow | ENUF=Enough, SNO=snow
+  CUZ ICAN | 'Cause I can | CUZ='Cause, I=I, CAN=can
+  SAY CHZ | Say cheese | SAY=Say, CHZ=cheese
+  O2B HOME | Oh, to be home | O=Oh, 2=to, B=be, HOME=home
+  NVUS | Envious | NV=Envi, US=ous
+  L8 NITE | Late night | L8=Late, NITE=night
+  PB N J | Peanut butter and jelly | P=Peanut, B=butter, N=and, J=jelly
+  H8 TRAFC | I hate traffic | H8=hate, TRAFC=traffic
+  XCELLNT | Excellent | X=Ex, CELL=cell, NT=ent
+  2MUCH2DO | Too much to do | 2=Too, MUCH=much, 2=to, DO=do
   
   ## Who drives this car?
   PI R2 | A math teacher (πr²) | PI=π, R2=r²
@@ -58,6 +78,26 @@ function createEngine(opts = {}) {
       .filter(x => x && x[0] && x[1]);
     return parts.length ? parts : undefined;
   }
+  const NEW_PLATES_2026_11_23 = `  BCNU | Be seeing you | B=Be, C=see, N=ing, U=you
+  XQZIT | Exquisite | X=Ex, Q=qui, ZIT=site
+  MT POCKT | Empty pocket | MT=Empty, POCKT=pocket
+  XPNSV | Expensive | X=Ex, PN=pen, SV=sive
+  AV8R | Aviator | AV=Avi, 8=at, R=or
+  GR8FUL | Grateful | GR8=Grate, FUL=ful
+  2B1ASK1 | To be one, ask one | 2=To, B=be, 1=one, ASK=ask, 1=one
+  10TATIV | Tentative | 10=Ten, TATIV=tative
+  CU@ BCH | See you at the beach | C=See, U=you, @=at, BCH=beach
+  MOOV OVR | Move over | hint: On a cow-print car | MOOV=Move, OVR=over
+  ENUF SNO | Enough snow | ENUF=Enough, SNO=snow
+  CUZ ICAN | 'Cause I can | CUZ='Cause, I=I, CAN=can
+  SAY CHZ | Say cheese | SAY=Say, CHZ=cheese
+  O2B HOME | Oh, to be home | O=Oh, 2=to, B=be, HOME=home
+  NVUS | Envious | NV=Envi, US=ous
+  L8 NITE | Late night | L8=Late, NITE=night
+  PB N J | Peanut butter and jelly | P=Peanut, B=butter, N=and, J=jelly
+  H8 TRAFC | I hate traffic | H8=hate, TRAFC=traffic
+  XCELLNT | Excellent | X=Ex, CELL=cell, NT=ent
+  2MUCH2DO | Too much to do | 2=Too, MUCH=much, 2=to, DO=do`;
   function parsePuzzles(text) {
     let cat = 'What does it say?';
     const out = [];
@@ -69,7 +109,7 @@ function createEngine(opts = {}) {
       const [plate, answer = '', ...extra] = l.split('|').map(s => s.trim());
       if (!plate) continue;
       const q = { cat, plate: plate.toUpperCase().slice(0, 10), answer };
-      for (const f of extra) { if (isDouble(f)) q.double = true; else if (f.includes('=')) q.parts = parseParts(f); }
+      for (const f of extra) { if (isDouble(f)) q.double = true; else if (/^hint\s*:/i.test(f)) q.hint = f.replace(/^hint\s*:\s*/i, ''); else if (f.includes('=')) q.parts = parseParts(f); }
       out.push(q);
     }
     return out;
@@ -112,10 +152,26 @@ function createEngine(opts = {}) {
     setTimeout(() => opts.persist && opts.persist(S), 0);
   }
   
+  // Saved games based on the starter list get the 20 plates added on 2026-11-23, at the end of the
+  // "What does it say?" section. Played plates are kept by remapping them by plate text.
+  if (/^\s*ICU2\s*\|/m.test(S.puzzleText || '') && !/^\s*BCNU\s*\|/m.test(S.puzzleText || '')) {
+    const plateAt = i => (S.puzzles[i] || {}).plate;
+    const usedPlates = S.used.map(plateAt), curPlate = plateAt(S.cur);
+    const lines = String(S.puzzleText).split('\n');
+    let at = lines.findIndex(l => /^\s*##\s*Who drives/i.test(l));
+    if (at < 0) at = lines.length;
+    while (at > 0 && !lines[at - 1].trim()) at--;
+    lines.splice(at, 0, ...NEW_PLATES_2026_11_23.split('\n'));
+    S.puzzleText = lines.join('\n'); S.puzzles = parsePuzzles(S.puzzleText);
+    const idx = pl => S.puzzles.findIndex(q => q.plate === pl);
+    S.used = usedPlates.map(idx).filter(i => i >= 0);
+    S.cur = curPlate != null && idx(curPlate) >= 0 ? idx(curPlate) : null;
+    setTimeout(() => opts.persist && opts.persist(S), 0);
+  }
   // Saved lists from before plate pieces were coloured: add the starter mapping to starter lines that have none.
   {
     const starter = {};
-    for (const l of DEFAULT_PUZZLES.split('\n')) { const f = l.split('|').map(x => x.trim()); if (f.length > 2 && f[2].includes('=')) starter[f[0] + '|' + f[1]] = f[2]; }
+    for (const l of DEFAULT_PUZZLES.split('\n')) { const f = l.split('|').map(x => x.trim()); const m = f.slice(2).find(x => x.includes('=') && !/^hint\s*:/i.test(x)); if (m) starter[f[0] + '|' + f[1]] = m; }
     let touched = false;
     const text = String(S.puzzleText || '').split('\n').map(raw => {
       const l = raw.trim(); if (!l || l.startsWith('#')) return raw;

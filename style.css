@@ -317,3 +317,5 @@ body.landing-page { background: var(--paper); color: var(--ink); }
 .pc.c0 { --pc: #e0412f; } .pc.c1 { --pc: #3b8cf0; } .pc.c2 { --pc: #2fae55; }
 .pc.c3 { --pc: #f08a10; } .pc.c4 { --pc: #a865f0; } .pc.c5 { --pc: #ec5aa0; }
 .plate .pc.c1 { --pc: #1f63c9; } .plate .pc.c2 { --pc: #188a3e; }
+
+.d-hint-line { font: 700 3.4vh/1.2 var(--font); color: var(--yellow); margin-top: .6vh; }

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Projector</title>
-<link rel="stylesheet" href="style.css?v=13">
+<link rel="stylesheet" href="style.css?v=14">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body class="display-page">
@@ -16,9 +16,9 @@
 <div class="unlock" id="unlock"><div class="sign green">Click to start the projector<small>Turns on sound and goes full screen</small></div></div>
 <div class="conn" id="conn"></div>
 
-<script src="mode.js?v=13"></script>
+<script src="mode.js?v=14"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="shared.js?v=13"></script>
+<script src="shared.js?v=14"></script>
 <script>
 const $ = id => document.getElementById(id);
 let lastEv = null, lastKey = '', lastPlateKey = '';
@@ -97,7 +97,7 @@ function renderStage(s) {
       + `<div class="limit answer ${s.phase === 'buzzed' && s.answerEndsAt ? '' : 'idle'}" id="answerSign"><div class="t" id="answerLabel">ANSWER</div><div class="n" id="answerNum">${s.settings.answerSeconds || ''}</div></div>`;
   const dbl = p_double(s);
   const countLine = s.tb ? 'Tie-breaker: ' + s.tb.teams.map(id => esc(teamName(s, id))).join(' vs ') : `Plate ${s.used.length + (showAnswer ? 0 : 1)} of ${s.puzzles.length}`;
-  html = `<div class="d-q"><div class="count">${countLine}${dbl ? ' <span class="d-double">Double points</span>' : ''}</div><div class="q">${esc(p.cat || '')}</div></div>
+  html = `<div class="d-q"><div class="count">${countLine}${dbl ? ' <span class="d-double">Double points</span>' : ''}</div><div class="q">${esc(p.cat || '')}</div>${p.hint ? `<div class="d-hint-line">${esc(p.hint)}</div>` : ''}</div>
     <div class="d-plate ${enter}">${plateHTML(covered ? (dbl ? 'DOUBLE' : '?') : p.plate, { cls: covered ? 'covered' + (dbl ? ' double' : '') : '', parts: showAnswer && p.parts })}</div>
     <div class="d-under">${under}</div>`;
   st.innerHTML = html; tick();
