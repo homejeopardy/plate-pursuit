@@ -319,3 +319,6 @@ body.landing-page { background: var(--paper); color: var(--ink); }
 .plate .pc.c1 { --pc: #1f63c9; } .plate .pc.c2 { --pc: #188a3e; }
 
 .d-hint-line { font: 700 3.4vh/1.2 var(--font); color: var(--yellow); margin-top: .6vh; }
+
+.check { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; cursor: pointer; }
+.check input { width: 18px; height: 18px; accent-color: var(--green); }

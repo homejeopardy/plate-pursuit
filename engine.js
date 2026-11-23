@@ -200,6 +200,11 @@ function createEngine(opts = {}) {
   function markUsed(i) { if (i != null && !S.used.includes(i)) S.used.push(i); }
   function nextUnused(after) {
     const n = S.puzzles.length;
+    if (S.shuffle !== false) {   // shuffle (on unless the host turned it off): any unplayed plate other than the one up now
+      const left = [...Array(n).keys()].filter(i => !S.used.includes(i) && i !== S.cur);
+      if (left.length) return left[Math.floor(Math.random() * left.length)];
+      return S.cur != null && !S.used.includes(S.cur) ? S.cur : null;
+    }
     for (let k = 1; k <= n; k++) { const i = ((after ?? -1) + k) % n; if (!S.used.includes(i)) return i; }
     return null;
   }
@@ -377,6 +382,7 @@ function createEngine(opts = {}) {
       if (q.double) delete q.double; else q.double = true;
       S.puzzleText = setDoubleInText(S.puzzleText, i, !!q.double);
     },
+    shuffle({ on }) { S.shuffle = on === true || on === 'true'; },
     removeTeam({ teamId }) { S.teams = S.teams.filter(t => t.id !== Number(teamId)); },
     setPuzzles({ text }) {
       const p = parsePuzzles(text); if (!p.length) return;
@@ -394,7 +400,7 @@ function createEngine(opts = {}) {
     newGame({ keepTeams } = {}) {
       clearTimeout(speedTimer); clearTimeout(finTimer); history.length = 0;
       const keep = { teams: keepTeams ? S.teams.map(t => ({ ...t, score: 0 })) : [], nextTeamId: S.nextTeamId,
-        puzzleText: S.puzzleText, puzzles: S.puzzles, settings: S.settings, ev: S.ev };
+        puzzleText: S.puzzleText, puzzles: S.puzzles, settings: S.settings, ev: S.ev, shuffle: S.shuffle };
       S = { ...freshState(), ...keep };
     },
   };
