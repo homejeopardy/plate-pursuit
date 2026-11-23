@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Projector</title>
-<link rel="stylesheet" href="style.css?v=11">
+<link rel="stylesheet" href="style.css?v=12">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body class="display-page">
@@ -16,9 +16,9 @@
 <div class="unlock" id="unlock"><div class="sign green">Click to start the projector<small>Turns on sound and goes full screen</small></div></div>
 <div class="conn" id="conn"></div>
 
-<script src="mode.js?v=11"></script>
+<script src="mode.js?v=12"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="shared.js?v=11"></script>
+<script src="shared.js?v=12"></script>
 <script>
 const $ = id => document.getElementById(id);
 let lastEv = null, lastKey = '', lastPlateKey = '';
@@ -68,9 +68,9 @@ function renderStage(s) {
     const showing = s.phase !== 'fwager';
     const under = s.phase === 'fwager' ? `<div class="d-hint">Place your bet on your phone</div>`
       : s.phase === 'fanswer' ? `<div class="limit answer" id="answerSign"><div class="t">ANSWER</div><div class="n" id="answerNum"></div></div><div class="d-hint">Type your answer on your phone</div>`
-      : `<div class="d-answer">${esc(p.answer)}</div>`;
+      : `<div class="d-answer">${answerPiecesHTML(p.answer, p.parts)}</div>`;
     html = `<div class="d-q"><div class="count">Final plate</div><div class="q">${esc(p.cat || '')}</div></div>
-      <div class="d-plate ${s.phase === 'fanswer' && enter !== '' ? 'enter' : ''}">${plateHTML(showing ? p.plate : 'BET NOW', { cls: showing ? '' : 'covered' })}</div>
+      <div class="d-plate ${s.phase === 'fanswer' && enter !== '' ? 'enter' : ''}">${plateHTML(showing ? p.plate : 'BET NOW', { cls: showing ? '' : 'covered', parts: s.phase === 'fjudge' && p.parts })}</div>
       <div class="d-under">${under}</div>`;
     st.innerHTML = html; tick(); return;
   }
@@ -92,13 +92,13 @@ function renderStage(s) {
   const showAnswer = s.phase === 'revealed';
   const lane = Array.from({ length: 10 }, () => '<i></i>').join('');
   const under = showAnswer
-    ? `<div><div class="d-answer">${esc(p.answer)}</div>${s.result ? `<div class="d-result">${s.result.tiebreak ? esc(teamName(s, s.result.teamId)) + ' wins the tie-breaker' : '+' + s.result.points + ' to ' + esc(teamName(s, s.result.teamId))}</div>` : ''}</div>`
+    ? `<div><div class="d-answer">${answerPiecesHTML(p.answer, p.parts)}</div>${s.result && s.result.tiebreak ? `<div class="d-result">${esc(teamName(s, s.result.teamId))} wins the tie-breaker</div>` : ''}</div>`
     : `<div class="limit"><div class="t">WORTH</div><div class="n" id="value"></div></div><div class="lane" id="lane">${lane}</div>`
       + `<div class="limit answer ${s.phase === 'buzzed' && s.answerEndsAt ? '' : 'idle'}" id="answerSign"><div class="t" id="answerLabel">ANSWER</div><div class="n" id="answerNum">${s.settings.answerSeconds || ''}</div></div>`;
   const dbl = p_double(s);
   const countLine = s.tb ? 'Tie-breaker: ' + s.tb.teams.map(id => esc(teamName(s, id))).join(' vs ') : `Plate ${s.used.length + (showAnswer ? 0 : 1)} of ${s.puzzles.length}`;
   html = `<div class="d-q"><div class="count">${countLine}${dbl ? ' <span class="d-double">Double points</span>' : ''}</div><div class="q">${esc(p.cat || '')}</div></div>
-    <div class="d-plate ${enter}">${plateHTML(covered ? (dbl ? 'DOUBLE' : '?') : p.plate, { cls: covered ? 'covered' + (dbl ? ' double' : '') : '' })}</div>
+    <div class="d-plate ${enter}">${plateHTML(covered ? (dbl ? 'DOUBLE' : '?') : p.plate, { cls: covered ? 'covered' + (dbl ? ' double' : '') : '', parts: showAnswer && p.parts })}</div>
     <div class="d-under">${under}</div>`;
   st.innerHTML = html; tick();
 }

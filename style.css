@@ -309,3 +309,11 @@ body.landing-page { background: var(--paper); color: var(--ink); }
 .pl-x2.on { background: var(--red); border-color: var(--red); color: #fff; }
 .pl.used .pl-x2 { text-decoration: none; }
 .h-double { display: inline-block; background: var(--red); color: #fff; font: 800 12px/1 var(--font); padding: 4px 7px 2px; border-radius: 4px; margin-left: 6px; letter-spacing: .06em; text-transform: uppercase; }
+
+/* ---------- revealed answer: each piece of the plate and the words it makes share a colour ---------- */
+.plate-text span.pc { display: inline; font: inherit; letter-spacing: inherit; transform: none; text-shadow: inherit; }
+.d-answer .pc { color: var(--pc); }
+.plate .pc { color: var(--pc); }
+.pc.c0 { --pc: #e0412f; } .pc.c1 { --pc: #3b8cf0; } .pc.c2 { --pc: #2fae55; }
+.pc.c3 { --pc: #f08a10; } .pc.c4 { --pc: #a865f0; } .pc.c5 { --pc: #ec5aa0; }
+.plate .pc.c1 { --pc: #1f63c9; } .plate .pc.c2 { --pc: #188a3e; }

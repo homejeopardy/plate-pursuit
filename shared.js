@@ -284,13 +284,44 @@ function plateHTML(text, opts = {}) {
     <i class="slot l"></i><i class="slot r"></i>
     <span class="sticker l">11</span><span class="sticker r">27</span>
     <div class="plate-top">${opts.top || 'Puzzle State'}</div>
-    <div class="plate-text"><span>${esc(text) || '&nbsp;'}</span></div>
+    <div class="plate-text"><span>${(opts.parts && platePiecesHTML(text, opts.parts)) || esc(text) || '&nbsp;'}</span></div>
     <div class="plate-bottom">${opts.bottom || 'LAND OF VANITY PLATES'}</div>
   </div>`;
 }
 
 // Stretch the characters across the plate. Letters are sized to the plate's height
 // in CSS; here they're squeezed (long plates) or spaced out (short ones) to fill the width.
+// ---- colour-matching the plate's pieces to the words they stand for
+const PIECE_COLORS = 6;
+function pieceColor(parts) {   // same piece of plate -> same colour (both YYs in YYURYYUB match)
+  const keys = [];
+  return parts.map(([k]) => { if (!keys.includes(k)) keys.push(k); return keys.indexOf(k) % PIECE_COLORS; });
+}
+function platePiecesHTML(plate, parts) {
+  const col = pieceColor(parts); let i = 0, html = '';
+  for (let n = 0; n < parts.length; n++) {
+    while (plate[i] === ' ') { html += ' '; i++; }
+    const k = parts[n][0];
+    if (plate.slice(i, i + k.length) !== k) return null;   // mapping doesn't fit this plate: show it plain
+    html += `<span class="pc c${col[n]}">${esc(k)}</span>`; i += k.length;
+  }
+  return html + esc(plate.slice(i));
+}
+function answerPiecesHTML(answer, parts) {
+  answer = String(answer || '');
+  if (!parts) return esc(answer);
+  const col = pieceColor(parts), lower = answer.toLowerCase(); let pos = 0, html = '';
+  parts.forEach(([, v], n) => {
+    const word = new RegExp('(?<![\\p{L}\\p{N}])' + v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\p{L}\\p{N}])', 'iug');
+    word.lastIndex = pos;
+    const m = word.exec(answer);
+    const at = m ? m.index : lower.indexOf(v.toLowerCase(), pos);
+    if (at < 0) return;
+    html += esc(answer.slice(pos, at)) + `<span class="pc c${col[n]}">${esc(answer.slice(at, at + v.length))}</span>`;
+    pos = at + v.length;
+  });
+  return html + esc(answer.slice(pos));
+}
 function fitPlate(plate) {
   const span = plate.querySelector('.plate-text span');
   if (!span || !plate.clientWidth) return;

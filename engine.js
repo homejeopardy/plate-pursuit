@@ -5,37 +5,37 @@ function createEngine(opts = {}) {
   const changed = () => { S.undoLabel = history.length ? history[history.length - 1].label : null; opts.persist && opts.persist(S); opts.onChange && opts.onChange(); };
   const history = [];   // undo stack (in memory only)
   const DEFAULT_PUZZLES = `## What does it say?
-  EZ PZ | Easy peasy
-  XLR8 | Accelerate
-  4GTFUL | Forgetful
-  YYURYYUB | Too wise you are, too wise you be
-  1DRFUL | Wonderful
-  NE1 HOME | Anyone home?
-  L8 AGAIN | Late again
-  2COOL4U | Too cool for you
-  W8 4 ME | Wait for me
-  4TUN8 | Fortunate
-  NVR L8 | Never late
-  IOU 0 | I owe you nothing
-  QT PIE | Cutie pie
-  ICU2 | I see you too
-  RU HNGRY | Are you hungry?
-  GR8 DAY | Great day
-  SK8 4EVR | Skate forever
-  OWE NO1 | Owe no one
-  Y B L8 | Why be late?
+  EZ PZ | Easy peasy | EZ=Easy, PZ=peasy
+  XLR8 | Accelerate | X=Ac, L=cel, R=er, 8=ate
+  4GTFUL | Forgetful | 4=For, GT=get, FUL=ful
+  YYURYYUB | Too wise you are, too wise you be | YY=Too wise, U=you, R=are, YY=too wise, U=you, B=be
+  1DRFUL | Wonderful | 1=Won, DR=der, FUL=ful
+  NE1 HOME | Anyone home? | NE=Any, 1=one, HOME=home
+  L8 AGAIN | Late again | L8=Late, AGAIN=again
+  2COOL4U | Too cool for you | 2=Too, COOL=cool, 4=for, U=you
+  W8 4 ME | Wait for me | W8=Wait, 4=for, ME=me
+  4TUN8 | Fortunate | 4=For, TUN=tun, 8=ate
+  NVR L8 | Never late | NVR=Never, L8=late
+  IOU 0 | I owe you nothing | I=I, O=owe, U=you, 0=nothing
+  QT PIE | Cutie pie | QT=Cutie, PIE=pie
+  ICU2 | I see you too | I=I, C=see, U=you, 2=too
+  RU HNGRY | Are you hungry? | R=Are, U=you, HNGRY=hungry
+  GR8 DAY | Great day | GR8=Great, DAY=day
+  SK8 4EVR | Skate forever | SK8=Skate, 4=for, EVR=ever
+  OWE NO1 | Owe no one | OWE=Owe, NO=no, 1=one
+  Y B L8 | Why be late? | Y=Why, B=be, L8=late
   
   ## Who drives this car?
-  PI R2 | A math teacher (πr²)
-  E MC2 | A science teacher (E=mc²)
-  2TH FXR | A dentist (tooth fixer)
-  IC 2020 | An eye doctor (I see 20/20)
-  RX 4 U | A pharmacist (prescription for you)
+  PI R2 | A math teacher (πr²) | PI=π, R2=r²
+  E MC2 | A science teacher (E=mc²) | E=E, MC2=mc²
+  2TH FXR | A dentist (tooth fixer) | 2TH=tooth, FXR=fixer
+  IC 2020 | An eye doctor (I see 20/20) | I=I, C=see, 2020=20/20
+  RX 4 U | A pharmacist (prescription for you) | RX=prescription, 4=for, U=you
   4 PAWS | A vet
   EIEIO | A farmer (Old MacDonald)
   ARRRR | A pirate
-  MOO2U | A dairy farmer (moo to you)
-  OUI OUI | A French teacher (yes, yes)`;
+  MOO2U | A dairy farmer (moo to you) | MOO=moo, 2=to, U=you
+  OUI OUI | A French teacher (yes, yes) | OUI=yes, OUI=yes`;
   
   // "PLATE | answer | x2" marks a double-points plate
   const isDouble = f => /^(x2|2x|double)$/i.test(String(f).trim());
@@ -52,6 +52,12 @@ function createEngine(opts = {}) {
       return indent + base.join(' | ') + (on ? ' | x2' : '');
     }).join('\n');
   }
+  // "YY=Too wise, U=you, ..." in order: which piece of the plate makes which words of the answer
+  function parseParts(f) {
+    const parts = f.split(',').map(x => { const k = x.indexOf('='); return k < 1 ? null : [x.slice(0, k).trim().toUpperCase(), x.slice(k + 1).trim()]; })
+      .filter(x => x && x[0] && x[1]);
+    return parts.length ? parts : undefined;
+  }
   function parsePuzzles(text) {
     let cat = 'What does it say?';
     const out = [];
@@ -60,8 +66,11 @@ function createEngine(opts = {}) {
       if (!l) continue;
       if (l.startsWith('##')) { cat = l.replace(/^#+/, '').trim() || cat; continue; }
       if (l.startsWith('#')) continue;
-      const [plate, answer = '', flag = ''] = l.split('|').map(s => s.trim());
-      if (plate) out.push({ cat, plate: plate.toUpperCase().slice(0, 10), answer, ...(isDouble(flag) ? { double: true } : {}) });
+      const [plate, answer = '', ...extra] = l.split('|').map(s => s.trim());
+      if (!plate) continue;
+      const q = { cat, plate: plate.toUpperCase().slice(0, 10), answer };
+      for (const f of extra) { if (isDouble(f)) q.double = true; else if (f.includes('=')) q.parts = parseParts(f); }
+      out.push(q);
     }
     return out;
   }
@@ -103,6 +112,24 @@ function createEngine(opts = {}) {
     setTimeout(() => opts.persist && opts.persist(S), 0);
   }
   
+  // Saved lists from before plate pieces were coloured: add the starter mapping to starter lines that have none.
+  {
+    const starter = {};
+    for (const l of DEFAULT_PUZZLES.split('\n')) { const f = l.split('|').map(x => x.trim()); if (f.length > 2 && f[2].includes('=')) starter[f[0] + '|' + f[1]] = f[2]; }
+    let touched = false;
+    const text = String(S.puzzleText || '').split('\n').map(raw => {
+      const l = raw.trim(); if (!l || l.startsWith('#')) return raw;
+      const f = l.split('|').map(x => x.trim());
+      const m = starter[(f[0] || '').toUpperCase() + '|' + (f[1] || '')];
+      if (!m || f.slice(2).some(x => x.includes('='))) return raw;
+      touched = true; return raw.replace(/\s+$/, '') + ' | ' + m;
+    }).join('\n');
+    if (touched) {
+      S.puzzleText = text; S.puzzles = parsePuzzles(text);
+      setTimeout(() => opts.persist && opts.persist(S), 0);
+    }
+  }
+
   // ---------- engine ----------
   const now = () => Date.now();
   const team = id => S.teams.find(t => t.id === id);
