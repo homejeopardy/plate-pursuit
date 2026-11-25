@@ -44,7 +44,12 @@ function createEngine(opts = {}) {
   IM2GUD4U | I'm too good for you | IM=I'm, 2=too, GUD=good, 4=for, U=you
   DCSN | Decision | D=De, C=ci, SN=sion
   10DR | Tender | 10=Ten, DR=der
-  SEZ U | Says you | SEZ=Says, U=you`;
+  SEZ U | Says you | SEZ=Says, U=you
+  IYDKNYK | If you don't know, now you know | I=If, Y=you, D=don't, K=know, N=now, Y=you, K=know
+  GUDAY M8 | G'day, mate | GUDAY=G'day, M8=mate
+  SOULM8S | Soulmates | SOUL=Soul, M8=mate, S=s
+  SRVSTEK | Serve steak | SRV=Serve, STEK=steak
+  GRLDCHS | Grilled cheese | GRLD=Grilled, CHS=cheese`;
   
   // "PLATE | answer | x2" marks a double-points plate
   const isDouble = f => /^(x2|2x|double)$/i.test(String(f).trim());
@@ -186,6 +191,24 @@ function createEngine(opts = {}) {
   if (/^\s*YYURYYUB\s*\|/m.test(S.puzzleText || '') && !/^\s*XQZME\s*\|/m.test(S.puzzleText || '')) {
     S.puzzleText = DEFAULT_PUZZLES; S.puzzles = parsePuzzles(DEFAULT_PUZZLES); S.used = []; S.cur = null;
     if (!['lobby', 'final'].includes(S.phase)) S.phase = 'lobby';
+    setTimeout(() => opts.persist && opts.persist(S), 0);
+  }
+  // 2026-11-25: five more plates the user asked for. Added after SEZ U (or at the end); nothing else moves.
+  if (/^\s*XQZME\s*\|/m.test(S.puzzleText || '') && !/^\s*IYDKNYK\s*\|/m.test(S.puzzleText || '')) {
+    const add = `  IYDKNYK | If you don't know, now you know | I=If, Y=you, D=don't, K=know, N=now, Y=you, K=know
+  GUDAY M8 | G'day, mate | GUDAY=G'day, M8=mate
+  SOULM8S | Soulmates | SOUL=Soul, M8=mate, S=s
+  SRVSTEK | Serve steak | SRV=Serve, STEK=steak
+  GRLDCHS | Grilled cheese | GRLD=Grilled, CHS=cheese`;
+    const lines = String(S.puzzleText).split('\n');
+    const at = lines.findIndex(l => /^\s*SEZ U\s*\|/.test(l));
+    if (at >= 0) lines.splice(at + 1, 0, ...add.split('\n')); else lines.push(...add.split('\n'));
+    const plateAt = i => (S.puzzles[i] || {}).plate;
+    const usedPlates = S.used.map(plateAt), curPlate = plateAt(S.cur);
+    S.puzzleText = lines.join('\n'); S.puzzles = parsePuzzles(S.puzzleText);
+    const idx = pl => S.puzzles.findIndex(q => q.plate === pl);
+    S.used = usedPlates.map(idx).filter(i => i >= 0);
+    S.cur = curPlate != null && idx(curPlate) >= 0 ? idx(curPlate) : null;
     setTimeout(() => opts.persist && opts.persist(S), 0);
   }
   // Saved lists from before plate pieces were coloured: add the starter mapping to starter lines that have none.
