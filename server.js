@@ -9,7 +9,7 @@ const { createEngine } = require('./engine.js');
 const PORT = Number(process.env.PORT) || 3400;
 const DIR = __dirname;
 const SAVE = path.join(DIR, 'saved-game.json');
-const PUBLIC = new Set(['index.html', 'host.html', 'display.html', 'play.html', 'stage.html', 'pointer.html', 'raptor.png', 'shared.js', 'engine.js', 'style.css']);
+const PUBLIC = new Set(['index.html', 'host.html', 'display.html', 'play.html', 'stage.html', 'pointer.html', 'raptor.png', 'states.js', 'shared.js', 'engine.js', 'style.css']);
 
 const clients = new Set();
 const engine = createEngine({

@@ -282,18 +282,25 @@ const teamName = (s, id) => (s.teams.find(t => t.id === id) || {}).name || '';
 const BADGES = { raptor: 'raptor.png' };   // pictures a plate's frame can carry ("| badge: raptor")
 function plateHTML(text, opts = {}) {
   // the state name is coloured once its piece ("~=…") has been revealed
-  let top = esc(opts.top || 'Puzzle State');
+  const L = opts.look;   // a state's plate design, from states.js
+  let top = esc(L && L.name && L.name.text || opts.top || 'Puzzle State');
   if (opts.parts) {
     const n = opts.parts.findIndex(([k]) => k === '~'), step = opts.step == null ? Infinity : opts.step;
     if (n >= 0 && n < step) top = `<span class="pc c${pieceColor(opts.parts)[n]}">${top}</span>`;
     else if (n >= 0) top = `<span class="st-wait">${top}</span>`;   // not its turn yet: plain ink, not the red of piece 1
   }
-  const plate = `<div class="plate ${opts.cls || ''}">
+  const lookStyle = L ? [`--plate-bg:${L.bg}`, `--plate-ink:${L.ink}`, `--rim:${L.rim || 'transparent'}`,
+    `--name-color:${(L.name && L.name.color) || L.ink}`, `--name-outline:${(L.name && L.name.outline) || 'transparent'}`, `--slogan-color:${(L.slogan && L.slogan.color) || L.ink}`].join(';') : '';
+  const sl = L && L.slogan && L.slogan.text || '', nm = L && L.name && L.name.text || '';
+  const lookCls = L ? `look name-${(L.name && L.name.font) || 'block'} name-${(L.name && L.name.pos) || 'top'} slogan-${(L.slogan && L.slogan.font) || 'block'}${sl.length > 28 ? ' long-slogan xlong-slogan' : sl.length > 18 ? ' long-slogan' : ''}${nm.length > 12 ? ' long-name' : ''}` : '';
+  const bottom = L ? esc((L.slogan && L.slogan.text) || '') : (opts.bottom || 'LAND OF VANITY PLATES');
+  const plate = `<div class="plate ${lookCls} ${opts.cls || ''}" style="${lookStyle}">
+    ${L && L.art ? `<div class="plate-art"><svg viewBox="0 0 200 100" preserveAspectRatio="none" aria-hidden="true">${L.art}</svg></div>` : ''}
     <i class="slot l"></i><i class="slot r"></i>
     <span class="sticker l">11</span><span class="sticker r">27</span>
     <div class="plate-top">${top}</div>
     <div class="plate-text"><span>${(opts.parts && platePiecesHTML(text, opts.parts, opts.step)) || esc(text) || '&nbsp;'}</span></div>
-    <div class="plate-bottom">${opts.bottom || 'LAND OF VANITY PLATES'}</div>
+    <div class="plate-bottom">${bottom}</div>
   </div>`;
   if (opts.frame == null && !opts.badge) return plate;
   const top2 = opts.badge && BADGES[opts.badge] ? `<img src="${BADGES[opts.badge]}" alt="${esc(opts.badge)}">` : esc(opts.frame || opts.badge || '');
@@ -303,7 +310,8 @@ function plateHTML(text, opts = {}) {
 function puzzlePlate(p, opts = {}) {
   if (!p) return plateHTML('', opts);
   const covered = /covered/.test(opts.cls || '');
-  return plateHTML(opts.text != null ? opts.text : p.plate, { ...opts, top: covered ? 'Puzzle State' : p.state,
+  const look = !covered && typeof STATE_STYLES !== 'undefined' ? STATE_STYLES[p.state] : null;
+  return plateHTML(opts.text != null ? opts.text : p.plate, { ...opts, look, top: covered ? 'Puzzle State' : p.state,
     frame: covered ? '' : (p.frame || ''), badge: covered ? null : p.badge });
 }
 
