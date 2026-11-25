@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Host</title>
-<link rel="stylesheet" href="style.css?v=24">
+<link rel="stylesheet" href="style.css?v=25">
 </head>
 <body class="host-page">
 <div class="host">
@@ -39,17 +39,17 @@
   <div class="card">
     <h2>Rounds</h2>
     <div class="row">
-      <button class="btn" data-a="lobby">Show join screen</button>
-      <button class="btn primary" data-a="next">Buzz-in: next plate <kbd>N</kbd></button>
+      <button class="btn" data-a="lobby">Show join screen <kbd>⌃⇧J</kbd></button>
+      <button class="btn primary" data-a="next">Buzz-in: next plate <kbd>⌃⇧N</kbd></button>
       <label class="check"><input type="checkbox" id="shuffle"> Shuffle plates <span class="note">(random order; off = top to bottom)</span></label>
     </div>
     <div class="row" style="margin-top:10px">
       <select id="speedTeam" class="btn"></select>
-      <button class="btn gold" id="speedReady">Set up speed round</button>
+      <button class="btn gold" id="speedReady">Set up speed round <kbd>⌃⇧S</kbd></button>
     </div>
     <div class="row" style="margin-top:10px">
-      <button class="btn gold" data-a="finalStart" id="finalStartBtn">Final wager plate</button>
-      <button class="btn gold" data-a="final">Show final standings</button>
+      <button class="btn gold" data-a="finalStart" id="finalStartBtn">Final wager plate <kbd>⌃⇧F</kbd></button>
+      <button class="btn gold" data-a="final">Show final standings <kbd>⌃⇧E</kbd></button>
       <button class="btn bad" id="newGame">New game…</button>
     </div>
     <div class="progress" id="progress" style="margin-top:10px"></div>
@@ -75,23 +75,30 @@
   <div class="card wide">
     <h2>Keyboard</h2>
     <div class="keys">
-      <div><kbd>Space</kbd> show plate / start the clock / reopen buzzers / next</div>
-      <div><kbd>N</kbd> next plate</div>
-      <div><kbd>C</kbd> correct</div>
-      <div><kbd>X</kbd> wrong</div>
-      <div><kbd>R</kbd> reveal the answer (no points)</div>
-      <div><kbd>P</kbd> pass (speed round)</div>
-      <div><kbd>U</kbd> undo the last action</div>
-      <div><kbd>1</kbd>–<kbd>9</kbd> buzz in for team 1–9</div>
-    </div>
+      <div class="note" style="grid-column:1/-1">Every shortcut is <b>Ctrl + Shift</b> + a letter (⌃⇧). They work from this page or the projector window, and even while you're typing in a box. The 5×3 stream deck layout and icons are in the <a href="deck/">deck</a> folder.</div>
+      <div><kbd>⌃⇧G</kbd> GO: the next step, whatever it is (show plate, reopen, next piece, next answer, next plate)</div>
+      <div><kbd>⌃⇧C</kbd> correct</div>
+      <div><kbd>⌃⇧X</kbd> wrong</div>
+      <div><kbd>⌃⇧O</kbd> reopen buzzers</div>
+      <div><kbd>⌃⇧U</kbd> undo</div>
+      <div><kbd>⌃⇧N</kbd> next plate</div>
+      <div><kbd>⌃⇧R</kbd> reveal the answer (no points)</div>
+      <div><kbd>⌃⇧W</kbd> show the whole answer at once</div>
+      <div><kbd>⌃⇧P</kbd> pass (speed round)</div>
+      <div><kbd>⌃⇧S</kbd> set up the speed round (team picked under Rounds)</div>
+      <div><kbd>⌃⇧J</kbd> join screen</div>
+      <div><kbd>⌃⇧F</kbd> final wager plate</div>
+      <div><kbd>⌃⇧L</kbd> lock final answers</div>
+      <div><kbd>⌃⇧T</kbd> tie-breaker plate</div>
+      <div><kbd>⌃⇧E</kbd> final standings</div></div>
   </div>
 </div>
 
-<script src="mode.js?v=24"></script>
+<script src="mode.js?v=25"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="engine.js?v=24"></script>
-<script src="states.js?v=24"></script>
-<script src="shared.js?v=24"></script>
+<script src="engine.js?v=25"></script>
+<script src="states.js?v=25"></script>
+<script src="shared.js?v=25"></script>
 <script>
 const $ = id => document.getElementById(id);
 const act = PP.act;
@@ -110,9 +117,9 @@ function revealNext(s) {
 }
 function revealButtons(s, B) {
   const p = s.puzzles[s.cur], n = revealNext(s);
-  if (n === 'finalNext') return B('finalNext', `Show answer: ${esc(teamName(s, s.fin.order[s.fin.shown]))}`, 'Space', 'primary');
+  if (n === 'finalNext') return B('finalNext', `Show answer: ${esc(teamName(s, s.fin.order[s.fin.shown]))}`, '⌃⇧G', 'primary');
   if (n === 'step') { const pc = piecesOf(p)[s.step];
-    return B('step', pieceTotal(p) > 1 ? `Show piece ${s.step + 1} of ${pieceTotal(p)}: ${esc(pc.plate)}` : 'Show the answer', 'Space', 'primary') + (pieceTotal(p) > 1 ? B('stepAll', 'Show whole answer') : ''); }
+    return B('step', pieceTotal(p) > 1 ? `Show piece ${s.step + 1} of ${pieceTotal(p)}: ${esc(pc.plate)}` : 'Show the answer', '⌃⇧G', 'primary') + (pieceTotal(p) > 1 ? B('stepAll', 'Show whole answer', '⌃⇧W') : ''); }
   return '';
 }
 document.querySelectorAll('[data-a]').forEach(b => b.onclick = () => act(b.dataset.a));
@@ -132,31 +139,31 @@ $('resetPuzzles').onclick = () => { if (confirm('Replace the plate list with the
 
 function controlsFor(s) {
   const B = (a, label, key, cls = '', on = true) => `<button class="btn ${cls}" data-act="${a}" ${on ? '' : 'disabled'}>${label}${key ? `<kbd>${key}</kbd>` : ''}</button>`;
-  const undo = `<button class="btn" data-act="undo" ${s.undoLabel ? '' : 'disabled'} title="Undo the last action">Undo${s.undoLabel ? ': ' + esc(s.undoLabel) : ''}<kbd>U</kbd></button>`;
+  const undo = `<button class="btn" data-act="undo" ${s.undoLabel ? '' : 'disabled'} title="Undo the last action">Undo${s.undoLabel ? ': ' + esc(s.undoLabel) : ''}<kbd>⌃⇧U</kbd></button>`;
   return phaseControls(s, B) + undo;
 }
 function phaseControls(s, B) {
   switch (s.phase) {
-    case 'ready': return B('start', 'Show plate + start clock', 'Space', 'primary') + B('reveal', 'Skip / reveal', 'R');
-    case 'running': return B('correct', 'Correct', 'C', 'good', false) + B('wrong', 'Wrong', 'X', 'bad', false) + B('reveal', 'Reveal answer', 'R');
-    case 'buzzed': return B('correct', 'Correct', 'C', 'good') + B('wrong', 'Wrong', 'X', 'bad') + B('reveal', 'Reveal answer', 'R');
-    case 'paused': return B('reopen', 'Reopen buzzers', 'Space', 'primary') + B('reveal', 'Reveal answer', 'R');
+    case 'ready': return B('start', 'Show plate + start clock', '⌃⇧G', 'primary') + B('reveal', 'Skip / reveal', '⌃⇧R');
+    case 'running': return B('correct', 'Correct', '⌃⇧C', 'good', false) + B('wrong', 'Wrong', '⌃⇧X', 'bad', false) + B('reveal', 'Reveal answer', '⌃⇧R');
+    case 'buzzed': return B('correct', 'Correct', '⌃⇧C', 'good') + B('wrong', 'Wrong', '⌃⇧X', 'bad') + B('reveal', 'Reveal answer', '⌃⇧R');
+    case 'paused': return B('reopen', 'Reopen buzzers', '⌃⇧O', 'primary') + B('reveal', 'Reveal answer', '⌃⇧R');
     case 'revealed': {
       const left = s.puzzles.length - s.used.length;   // the plate just played is already counted as used
       const rv = revealButtons(s, B);
-      if (rv) return rv + (s.tb ? '' : B('next', 'Skip to next plate', 'N', '', left > 0));
-      if (s.tb) return B('tiebreak', 'Another tie-breaker plate', '', 'primary', left > 0) + B('final', 'Final standings', left > 0 ? '' : 'Space', 'gold');
-      return left > 0 ? B('next', 'Next plate', 'N / Space', 'primary')
-        : `<span class="note">That was the last plate.</span>` + B('final', 'Final standings', 'Space', 'gold');
+      if (rv) return rv + (s.tb ? '' : B('next', 'Skip to next plate', '⌃⇧N', '', left > 0));
+      if (s.tb) return B('tiebreak', 'Another tie-breaker plate', '⌃⇧T', 'primary', left > 0) + B('final', 'Final standings', '⌃⇧E', 'gold');
+      return left > 0 ? B('next', 'Next plate', '⌃⇧G', 'primary')
+        : `<span class="note">That was the last plate.</span>` + B('final', 'Final standings', '⌃⇧E', 'gold');
     }
-    case 'fwager': return B('finalShow', 'Show final plate', 'Space', 'primary');
-    case 'fanswer': return B('finalLock', 'Stop answers now', '', 'primary');
-    case 'fjudge': { const rv = revealButtons(s, B); return rv + B('final', 'Final standings', rv ? '' : 'Space', 'gold'); }
-    case 'speedready': return B('speedStart', 'Start 60 seconds', 'Space', 'primary');
-    case 'speed': return B('correct', 'Correct', 'C', 'good') + B('pass', 'Pass', 'P', 'bad') + B('speedStop', 'Stop clock');
-    case 'speedover': return B('next', 'Back to buzz-in plates', 'N', 'primary') + B('final', 'Final standings', '', 'gold');
-    case 'final': return (ppTiedTop(s).length ? B('tiebreak', 'Tie-breaker plate', '', 'primary') : '') + B('lobby', 'Back to join screen');
-    default: return B('next', 'First plate', 'N / Space', 'primary');
+    case 'fwager': return B('finalShow', 'Show final plate', '⌃⇧G', 'primary');
+    case 'fanswer': return B('finalLock', 'Stop answers now', '⌃⇧L', 'primary');
+    case 'fjudge': { const rv = revealButtons(s, B); return rv + B('final', 'Final standings', '⌃⇧E', 'gold'); }
+    case 'speedready': return B('speedStart', 'Start 60 seconds', '⌃⇧G', 'primary');
+    case 'speed': return B('correct', 'Correct', '⌃⇧C', 'good') + B('pass', 'Pass', '⌃⇧P', 'bad') + B('speedStop', 'Stop clock');
+    case 'speedover': return B('next', 'Back to buzz-in plates', '⌃⇧N', 'primary') + B('final', 'Final standings', '⌃⇧E', 'gold');
+    case 'final': return (ppTiedTop(s).length ? B('tiebreak', 'Tie-breaker plate', '⌃⇧T', 'primary') : '') + B('lobby', 'Back to join screen', '⌃⇧J');
+    default: return B('next', 'First plate', '⌃⇧G', 'primary');
   }
 }
 
@@ -276,31 +283,29 @@ function tick() {
 }
 setInterval(tick, 100);
 
+// Shortcuts: Ctrl+Shift+letter (PP_KEYS in shared.js). The projector window passes its presses here too.
+function goStep(s) {   // the one-button "next step"
+  if (s.phase === 'ready') return act('start');
+  if (s.phase === 'paused') return act('reopen');
+  if (s.phase === 'fwager') return act('finalShow');
+  if (s.phase === 'speedready') return act('speedStart');
+  if (revealNext(s)) return act(revealNext(s));               // next team's final answer, or next piece of the answer
+  if (s.phase === 'fjudge') return act('final');
+  if (s.phase === 'revealed' && s.tb) return;
+  if (s.phase === 'revealed' && s.used.length >= s.puzzles.length) return act('final');   // no plates left
+  if (['lobby', 'revealed', 'speedover'].includes(s.phase)) return act('next');
+}
+function runKey(name) {
+  const s = PP.state; if (!s || !name) return;
+  if (name === 'go') goStep(s);
+  else if (name === 'speed') { if ($('speedTeam').value) act('speedReady', { teamId: $('speedTeam').value }); }
+  else act(name);
+}
 document.addEventListener('keydown', e => {
-  const tag = (e.target.tagName || '').toLowerCase();
-  if (['input', 'textarea', 'select'].includes(tag) || e.metaKey || e.ctrlKey || e.altKey) return;
-  const s = PP.state; if (!s) return;
-  const k = e.key.toLowerCase();
-  if (k === ' ') {
-    e.preventDefault();
-    if (s.phase === 'ready') act('start');
-    else if (s.phase === 'paused') act('reopen');
-    else if (s.phase === 'fwager') act('finalShow');
-    else if (s.phase === 'speedready') act('speedStart');
-    else if (revealNext(s)) act(revealNext(s));               // next team's final answer, or next piece of the answer
-    else if (s.phase === 'fjudge') act('final');
-    else if (s.phase === 'revealed' && s.tb) {}
-    else if (s.phase === 'revealed' && s.used.length >= s.puzzles.length) act('final');   // no plates left
-    else if (['lobby', 'revealed'].includes(s.phase)) act('next');
-  }
-  else if (k === 'u') act('undo');
-  else if (k === 'n') act('next');
-  else if (k === 'c') act('correct');
-  else if (k === 'x') act('wrong');
-  else if (k === 'r') act('reveal');
-  else if (k === 'p') act('pass');
-  else if (/^[1-9]$/.test(k)) { const t = s.teams[Number(k) - 1]; if (t) act('buzz', { teamId: t.id }); }
-});
+  const name = ppKeyName(e); if (!name) return;
+  e.preventDefault(); e.stopPropagation(); runKey(name);
+}, true);
+ppOnForwardedKey(runKey);
 
 PP.on(render);
 PP.startHost();

@@ -87,8 +87,9 @@ http.createServer(async (req, res) => {
     return json(res, { ok: true, won: engine.buzz(b.teamId) });
   }
 
-  const file = p === '/' ? 'index.html' : p.slice(1).split('?')[0];
-  if (!PUBLIC.has(file)) { res.writeHead(404); return res.end('Not found'); }
+  let file = p === '/' ? 'index.html' : p.slice(1).split('?')[0];
+  if (file === 'deck' || file === 'deck/') file = 'deck/index.html';
+  if (!PUBLIC.has(file) && !/^deck\/[a-z]+\.(png|html)$/.test(file)) { res.writeHead(404); return res.end('Not found'); }
   fs.readFile(path.join(DIR, file), (err, data) => {
     if (err) { res.writeHead(404); return res.end('Not found'); }
     res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)], 'Cache-Control': 'no-store' });

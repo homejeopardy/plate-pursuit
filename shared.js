@@ -275,6 +275,17 @@ function ppTiedTop(s) {
 // During the final plate a team's new score stays secret until its answer is put on screen.
 function ppFinShown(s, id) { return !s.fin || !['fanswer', 'fjudge'].includes(s.phase) || (s.phase === 'fjudge' && s.fin.order.indexOf(id) < s.fin.shown); }
 function ppShownScore(s, t) { return ppFinShown(s, t.id) ? t.score : (s.fin.base[t.id] ?? t.score); }
+// ---- keyboard shortcuts (stream deck): Ctrl+Shift+letter -> what it does
+const PP_KEYS = { KeyG: 'go', KeyC: 'correct', KeyX: 'wrong', KeyO: 'reopen', KeyU: 'undo', KeyN: 'next', KeyR: 'reveal', KeyW: 'stepAll',
+  KeyP: 'pass', KeyS: 'speed', KeyJ: 'lobby', KeyF: 'finalStart', KeyL: 'finalLock', KeyT: 'tiebreak', KeyE: 'final' };
+function ppKeyName(e) { return e.ctrlKey && e.shiftKey && !e.metaKey && !e.altKey ? PP_KEYS[e.code] || null : null; }
+const _keyChan = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('plate-pursuit-keys') : null;
+// projector / crew windows on the same computer: hand shortcut presses to the control page
+function ppForwardKeys() {
+  if (!_keyChan) return;
+  document.addEventListener('keydown', e => { const n = ppKeyName(e); if (!n) return; e.preventDefault(); _keyChan.postMessage({ key: n, room: PP.room || null }); }, true);
+}
+function ppOnForwardedKey(fn) { if (_keyChan) _keyChan.onmessage = e => { if (e.data && (e.data.room || null) === (PP.room || null)) fn(e.data.key); }; }
 function ppFinalLeft(s) { return s.fin && s.fin.endsAt ? Math.max(0, (s.fin.endsAt - PP.now()) / 1000) : null; }
 function ppAnswerLeft(s) { return s.answerEndsAt ? Math.max(0, (s.answerEndsAt - PP.now()) / 1000) : null; }
 function ppFraction(s) { return Math.max(0, 1 - ppElapsed(s) / s.settings.drainSeconds); }

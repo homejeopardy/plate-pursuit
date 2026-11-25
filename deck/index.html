@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plate Pursuit · Stream deck</title><link rel="stylesheet" href="../style.css?v=25">
+<style>
+body { background: var(--asphalt); color: #f2efe6; margin: 0; font-family: var(--font); }
+main { max-width: 1000px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font: 900 28px/1.1 var(--font); margin: 0 0 6px; } h2 { font: 800 18px/1.2 var(--font); margin: 28px 0 10px; }
+p, li { line-height: 1.5; color: #d8d4c8; } a { color: var(--yellow); }
+.grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+figure { margin: 0; background: rgba(255,255,255,.05); border-radius: 10px; padding: 10px; }
+figure img { width: 100%; height: auto; display: block; border-radius: 8px; }
+figcaption { display: grid; gap: 4px; margin-top: 8px; font-size: 13px; color: #c9c4b8; }
+kbd { font: 800 13px var(--font); color: #fff; }
+</style></head>
+<body><main>
+<h1>Stream deck layout (5 × 3)</h1>
+<p>For the VSD Craft deck: 15 buttons on one page, laid out exactly like this grid. Every button sends <b>Ctrl + Shift + a letter</b>. The keys work when the control page <i>or</i> the projector window is in front (on the same computer), and you can also press them by hand.</p>
+<div class="grid"><figure><img src="go.png" alt="GO" width="144" height="144"><figcaption><kbd>Ctrl+Shift+G</kbd><span>The next step, whatever it is: show the plate and start the clock, reopen buzzers, show the next answer piece, show the next team's final answer, or go to the next plate.</span></figcaption></figure><figure><img src="correct.png" alt="CORRECT" width="144" height="144"><figcaption><kbd>Ctrl+Shift+C</kbd><span>The team that buzzed is right (also counts a plate in the speed round).</span></figcaption></figure><figure><img src="wrong.png" alt="WRONG" width="144" height="144"><figcaption><kbd>Ctrl+Shift+X</kbd><span>The team that buzzed is wrong.</span></figcaption></figure><figure><img src="reopen.png" alt="REOPEN BUZZERS" width="144" height="144"><figcaption><kbd>Ctrl+Shift+O</kbd><span>Open buzzers again after a wrong answer.</span></figcaption></figure><figure><img src="undo.png" alt="UNDO" width="144" height="144"><figcaption><kbd>Ctrl+Shift+U</kbd><span>Take back the last action.</span></figcaption></figure><figure><img src="next.png" alt="NEXT PLATE" width="144" height="144"><figcaption><kbd>Ctrl+Shift+N</kbd><span>Skip straight to the next plate.</span></figcaption></figure><figure><img src="reveal.png" alt="REVEAL ANSWER" width="144" height="144"><figcaption><kbd>Ctrl+Shift+R</kbd><span>Show the answer with no points (nobody got it).</span></figcaption></figure><figure><img src="whole.png" alt="WHOLE ANSWER" width="144" height="144"><figcaption><kbd>Ctrl+Shift+W</kbd><span>Show the whole answer at once instead of piece by piece.</span></figcaption></figure><figure><img src="pass.png" alt="PASS" width="144" height="144"><figcaption><kbd>Ctrl+Shift+P</kbd><span>Speed round: skip this plate.</span></figcaption></figure><figure><img src="speed.png" alt="SPEED ROUND" width="144" height="144"><figcaption><kbd>Ctrl+Shift+S</kbd><span>Set up the speed round for the team picked under Rounds on the control page.</span></figcaption></figure><figure><img src="join.png" alt="JOIN SCREEN" width="144" height="144"><figcaption><kbd>Ctrl+Shift+J</kbd><span>Put the join screen (QR code) back on the projector.</span></figcaption></figure><figure><img src="final.png" alt="FINAL WAGER" width="144" height="144"><figcaption><kbd>Ctrl+Shift+F</kbd><span>Start the final wager plate.</span></figcaption></figure><figure><img src="lock.png" alt="LOCK ANSWERS" width="144" height="144"><figcaption><kbd>Ctrl+Shift+L</kbd><span>Final plate: stop answers now.</span></figcaption></figure><figure><img src="tie.png" alt="TIE- BREAKER" width="144" height="144"><figcaption><kbd>Ctrl+Shift+T</kbd><span>Tie-breaker plate (when teams are tied for first).</span></figcaption></figure><figure><img src="standings.png" alt="FINAL STANDINGS" width="144" height="144"><figcaption><kbd>Ctrl+Shift+E</kbd><span>Show the final standings.</span></figcaption></figure></div>
+<h2>Download</h2>
+<p><a href="layout.png" download>layout.png</a> (the whole grid) · icons: <a href="go.png" download>go.png</a> · <a href="correct.png" download>correct.png</a> · <a href="wrong.png" download>wrong.png</a> · <a href="reopen.png" download>reopen.png</a> · <a href="undo.png" download>undo.png</a> · <a href="next.png" download>next.png</a> · <a href="reveal.png" download>reveal.png</a> · <a href="whole.png" download>whole.png</a> · <a href="pass.png" download>pass.png</a> · <a href="speed.png" download>speed.png</a> · <a href="join.png" download>join.png</a> · <a href="final.png" download>final.png</a> · <a href="lock.png" download>lock.png</a> · <a href="tie.png" download>tie.png</a> · <a href="standings.png" download>standings.png</a></p>
+<h2>Set up each button in VSD Craft</h2>
+<ol>
+<li>Drag the <b>Hotkey</b> action onto the button (it's in the System group).</li>
+<li>Click the hotkey box and press the combination shown above, for example <b>Ctrl + Shift + G</b> for GO. On a Mac that's the <b>Control</b> key, not Command.</li>
+<li>Click the button's icon and choose the matching PNG from this page.</li>
+</ol>
+<p>Then click into the control page (or the projector window) once, so the browser is the app in front, and the buttons will run the game.</p>
+<p><a href="../host.html">Back to the control page</a></p>
+</main></body></html>
