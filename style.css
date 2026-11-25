@@ -56,7 +56,7 @@ button { font: inherit; cursor: pointer; }
 .plate-text { position: absolute; left: 0; right: 0; top: 21cqh; height: 62cqh;
   display: flex; align-items: center; justify-content: center; }
 .plate-text span { display: inline-block; white-space: pre; transform-origin: center;
-  font: 700 84cqh/.78 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  font: 700 var(--serial, 84cqh)/.78 'Barlow Condensed', 'Arial Narrow', sans-serif;
   text-shadow: -.35cqh -.35cqh 0 rgba(255,255,255,.95), .45cqh .6cqh .35cqh rgba(0,0,0,.38); }
 .plate-bottom { position: absolute; bottom: 6cqh; left: 0; right: 0; text-align: center;
   font: 800 6.4cqh/1 var(--font); letter-spacing: .32em; text-indent: .32em; }
@@ -411,3 +411,20 @@ body.crew-page { background: var(--asphalt); color: #fff; min-height: 100vh; }
 .plate.long-slogan.xlong-slogan .plate-bottom { font-size: 4.3cqh; letter-spacing: .02em; }
 .plate.look .plate-top { text-shadow: -.5cqh 0 0 var(--name-outline), .5cqh 0 0 var(--name-outline), 0 -.5cqh 0 var(--name-outline), 0 .5cqh 0 var(--name-outline); }
 .plate.slogan-script .plate-bottom { font-size: 12cqh; }
+
+/* labels never run under the corner stickers (5.5–14.5cqw) or bolt holes (17–24cqw) */
+.plate .plate-top { left: 25.5cqw; right: 25.5cqw; white-space: nowrap; }
+.plate .plate-bottom { left: 7cqw; right: 7cqw; white-space: nowrap; }
+.plate.name-bottom .plate-top { left: 7cqw; right: 7cqw; }
+.plate.name-bottom .plate-bottom { left: 25.5cqw; right: 25.5cqw; }
+.plate-top > .fit, .plate-bottom > .fit { display: inline-block; transform-origin: center; }
+.plate .plate-top, .plate .plate-bottom { display: flex; justify-content: center; align-items: flex-start; }
+.plate-top > .fit, .plate-bottom > .fit { flex: none; }
+
+/* state plates: the tagline gets its own band at the bottom, so the big characters sit a little smaller and higher */
+.plate.look { --serial: 74cqh; }
+.plate.look .plate-text { top: 19cqh; height: 62cqh; align-items: flex-start; padding-top: 2cqh; box-sizing: border-box; }
+.plate.look .plate-bottom { bottom: 4.5cqh; }
+.plate.look.slogan-script .plate-bottom { font-size: 9cqh; bottom: 3.6cqh; }
+.plate.look.name-bottom .plate-top { font-size: 9.5cqh; bottom: 4.2cqh; }
+.plate.look.name-bottom.name-script .plate-top { font-size: 11cqh; }

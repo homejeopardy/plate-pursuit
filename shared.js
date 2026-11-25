@@ -298,9 +298,9 @@ function plateHTML(text, opts = {}) {
     ${L && L.art ? `<div class="plate-art"><svg viewBox="0 0 200 100" preserveAspectRatio="none" aria-hidden="true">${L.art}</svg></div>` : ''}
     <i class="slot l"></i><i class="slot r"></i>
     <span class="sticker l">11</span><span class="sticker r">27</span>
-    <div class="plate-top">${top}</div>
+    <div class="plate-top"><span class="fit">${top}</span></div>
     <div class="plate-text"><span>${(opts.parts && platePiecesHTML(text, opts.parts, opts.step)) || esc(text) || '&nbsp;'}</span></div>
-    <div class="plate-bottom">${bottom}</div>
+    <div class="plate-bottom"><span class="fit">${bottom}</span></div>
   </div>`;
   if (opts.frame == null && !opts.badge) return plate;
   const top2 = opts.badge && BADGES[opts.badge] ? `<img src="${BADGES[opts.badge]}" alt="${esc(opts.badge)}">` : esc(opts.frame || opts.badge || '');
@@ -375,7 +375,19 @@ function answerPiecesHTML(p, step = Infinity) {   // p = the puzzle
     return x.n < step ? `<span class="pc c${col[x.n]}">${esc(x.t)}</span>` : hide(x.t);
   }).join('');
 }
+// The state name and slogan stay inside their lane (clear of the corner stickers and bolt holes): squeeze, then shrink.
+function fitLabels(plate) {
+  plate.querySelectorAll('.plate-top > .fit, .plate-bottom > .fit').forEach(f => {
+    f.style.transform = ''; f.style.fontSize = '';
+    const lane = f.parentElement.clientWidth, w = f.scrollWidth;
+    if (!lane || !w || w <= lane) return;
+    let k = lane / w;
+    if (k < 0.72) { f.style.fontSize = (parseFloat(getComputedStyle(f).fontSize) * k / 0.72) + 'px'; k = 0.72; }
+    f.style.transform = `scaleX(${k})`;
+  });
+}
 function fitPlate(plate) {
+  fitLabels(plate);
   const span = plate.querySelector('.plate-text span');
   if (!span || !plate.clientWidth) return;
   span.style.cssText = '';
@@ -385,7 +397,7 @@ function fitPlate(plate) {
   if (!w) return;
   if (w > avail) {
     let squeeze = avail / w;
-    if (squeeze < 0.62) { span.style.fontSize = (84 * squeeze / 0.62) + 'cqh'; squeeze = 0.62; }
+    if (squeeze < 0.62) { span.style.fontSize = `calc(var(--serial, 84cqh) * ${squeeze / 0.62})`; squeeze = 0.62; }
     span.style.transform = `scaleX(${squeeze})`;
   } else if (chars > 1) {
     const fontPx = parseFloat(getComputedStyle(span).fontSize);
