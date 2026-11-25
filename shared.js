@@ -277,7 +277,8 @@ function ppFinShown(s, id) { return !s.fin || !['fanswer', 'fjudge'].includes(s.
 function ppShownScore(s, t) { return ppFinShown(s, t.id) ? t.score : (s.fin.base[t.id] ?? t.score); }
 // ---- keyboard shortcuts (stream deck): Ctrl+Shift+letter -> what it does
 const PP_KEYS = { KeyG: 'go', KeyC: 'correct', KeyX: 'wrong', KeyO: 'reopen', KeyU: 'undo', KeyN: 'next', KeyR: 'reveal', KeyW: 'stepAll',
-  KeyP: 'pass', KeyS: 'speed', KeyJ: 'lobby', KeyF: 'finalStart', KeyL: 'finalLock', KeyT: 'tiebreak', KeyE: 'final' };
+  KeyP: 'pass', KeyS: 'speed', KeyJ: 'lobby', KeyF: 'finalStart', KeyL: 'finalLock', KeyT: 'tiebreak', KeyE: 'final',
+  KeyK: 'speedStop', Digit1: 'speed1', Digit2: 'speed2', Digit3: 'speed3', Digit4: 'speed4', Digit5: 'speed5' };   // speed round page
 function ppKeyName(e) { return e.ctrlKey && e.shiftKey && !e.metaKey && !e.altKey ? PP_KEYS[e.code] || null : null; }
 const _keyChan = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('plate-pursuit-keys') : null;
 // projector / crew windows on the same computer: hand shortcut presses to the control page

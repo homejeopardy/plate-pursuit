@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Host</title>
-<link rel="stylesheet" href="style.css?v=25">
+<link rel="stylesheet" href="style.css?v=26">
 </head>
 <body class="host-page">
 <div class="host">
@@ -90,15 +90,17 @@
       <div><kbd>⌃⇧F</kbd> final wager plate</div>
       <div><kbd>⌃⇧L</kbd> lock final answers</div>
       <div><kbd>⌃⇧T</kbd> tie-breaker plate</div>
-      <div><kbd>⌃⇧E</kbd> final standings</div></div>
+      <div><kbd>⌃⇧E</kbd> final standings</div>
+      <div><kbd>⌃⇧1</kbd>–<kbd>⌃⇧5</kbd> set up the speed round for team 1–5 (order of the Teams list)</div>
+      <div><kbd>⌃⇧K</kbd> stop the speed-round clock</div></div>
   </div>
 </div>
 
-<script src="mode.js?v=25"></script>
+<script src="mode.js?v=26"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="engine.js?v=25"></script>
-<script src="states.js?v=25"></script>
-<script src="shared.js?v=25"></script>
+<script src="engine.js?v=26"></script>
+<script src="states.js?v=26"></script>
+<script src="shared.js?v=26"></script>
 <script>
 const $ = id => document.getElementById(id);
 const act = PP.act;
@@ -160,7 +162,7 @@ function phaseControls(s, B) {
     case 'fanswer': return B('finalLock', 'Stop answers now', '⌃⇧L', 'primary');
     case 'fjudge': { const rv = revealButtons(s, B); return rv + B('final', 'Final standings', '⌃⇧E', 'gold'); }
     case 'speedready': return B('speedStart', 'Start 60 seconds', '⌃⇧G', 'primary');
-    case 'speed': return B('correct', 'Correct', '⌃⇧C', 'good') + B('pass', 'Pass', '⌃⇧P', 'bad') + B('speedStop', 'Stop clock');
+    case 'speed': return B('correct', 'Correct', '⌃⇧C', 'good') + B('pass', 'Pass', '⌃⇧P', 'bad') + B('speedStop', 'Stop clock', '⌃⇧K');
     case 'speedover': return B('next', 'Back to buzz-in plates', '⌃⇧N', 'primary') + B('final', 'Final standings', '⌃⇧E', 'gold');
     case 'final': return (ppTiedTop(s).length ? B('tiebreak', 'Tie-breaker plate', '⌃⇧T', 'primary') : '') + B('lobby', 'Back to join screen', '⌃⇧J');
     default: return B('next', 'First plate', '⌃⇧G', 'primary');
@@ -299,6 +301,10 @@ function runKey(name) {
   const s = PP.state; if (!s || !name) return;
   if (name === 'go') goStep(s);
   else if (name === 'speed') { if ($('speedTeam').value) act('speedReady', { teamId: $('speedTeam').value }); }
+  else if (/^speed\d$/.test(name)) {   // speed round for team 1–5 (in the order of the Teams list)
+    const t = s.teams[Number(name.slice(5)) - 1]; if (!t) return;
+    $('speedTeam').value = String(t.id); act('speedReady', { teamId: t.id });
+  }
   else act(name);
 }
 document.addEventListener('keydown', e => {
