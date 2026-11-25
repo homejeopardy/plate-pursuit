@@ -272,6 +272,9 @@ function ppTiedTop(s) {
   const r = ppRanking(s).filter(x => x.rank === 1);
   return r.length > 1 ? r.map(x => x.team.id) : [];
 }
+// During the final plate a team's new score stays secret until its answer is put on screen.
+function ppFinShown(s, id) { return !s.fin || !['fanswer', 'fjudge'].includes(s.phase) || (s.phase === 'fjudge' && s.fin.order.indexOf(id) < s.fin.shown); }
+function ppShownScore(s, t) { return ppFinShown(s, t.id) ? t.score : (s.fin.base[t.id] ?? t.score); }
 function ppFinalLeft(s) { return s.fin && s.fin.endsAt ? Math.max(0, (s.fin.endsAt - PP.now()) / 1000) : null; }
 function ppAnswerLeft(s) { return s.answerEndsAt ? Math.max(0, (s.answerEndsAt - PP.now()) / 1000) : null; }
 function ppFraction(s) { return Math.max(0, 1 - ppElapsed(s) / s.settings.drainSeconds); }

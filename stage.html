@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#262626">
 <title>Plate Pursuit · Host script</title>
-<link rel="stylesheet" href="style.css?v=22">
+<link rel="stylesheet" href="style.css?v=23">
 </head>
 <body class="crew-page">
 <div class="crew-wrap" id="app">
@@ -18,10 +18,10 @@
   <div class="cr-scores" id="scores"></div>
   <div class="cr-conn" id="conn"></div>
 </div>
-<script src="mode.js?v=22"></script>
+<script src="mode.js?v=23"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="states.js?v=22"></script>
-<script src="shared.js?v=22"></script>
+<script src="states.js?v=23"></script>
+<script src="shared.js?v=23"></script>
 <script>
 const $ = id => document.getElementById(id);
 if (PP.needRoom('HOST SCRIPT')) throw new Error('waiting for room code');
@@ -103,7 +103,7 @@ function render(s) {
     const revealing = ['revealed', 'fjudge'].includes(s.phase);
     $('pieces').innerHTML = showPlate && pcs.length > 1 ? pcs.map((pc, i) => `<li class="${revealing && i < s.step ? 'done' : ''} ${revealing && i === s.step ? 'next' : ''}">
       <span class="pc c${pc.color}">${esc(pc.plate)}</span> = <span class="pc c${pc.color}">${esc(pc.means)}</span></li>`).join('') : '';
-    $('scores').innerHTML = s.teams.map(t => `<div class="sign green d-team ${s.phase === 'buzzed' && s.buzzed === t.id ? 'buzzed' : ''}" style="${teamStyle(t)}"><div class="n">${esc(t.name)}</div><div class="s">${t.score}</div></div>`).join('');
+    $('scores').innerHTML = s.teams.map(t => `<div class="sign green d-team ${s.phase === 'buzzed' && s.buzzed === t.id ? 'buzzed' : ''}" style="${teamStyle(t)}"><div class="n">${esc(t.name)}</div><div class="s">${ppShownScore(s, t)}</div></div>`).join('');
     const names = { lobby: 'Join screen', ready: 'Buzz-in', running: 'Buzz-in', buzzed: 'Buzz-in', paused: 'Buzz-in', revealed: 'Buzz-in',
       speedready: 'Speed round', speed: 'Speed round', speedover: 'Speed round', fwager: 'Final plate', fanswer: 'Final plate', fjudge: 'Final plate', final: 'Game over' };
     $('meta').textContent = (s.tb && !['final', 'lobby'].includes(s.phase) ? 'Tie-breaker' : names[s.phase] || '') + (p && ['ready', 'running', 'buzzed', 'paused', 'revealed'].includes(s.phase) && !s.tb ? ` · plate ${s.used.length + (s.phase === 'revealed' ? 0 : 1)} of ${s.puzzles.length}` : '');

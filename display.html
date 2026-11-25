@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Projector</title>
-<link rel="stylesheet" href="style.css?v=22">
+<link rel="stylesheet" href="style.css?v=23">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body class="display-page">
@@ -16,10 +16,10 @@
 <div class="unlock" id="unlock"><div class="sign green">Click to start the projector<small>Turns on sound and goes full screen</small></div></div>
 <div class="conn" id="conn"></div>
 
-<script src="mode.js?v=22"></script>
+<script src="mode.js?v=23"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="states.js?v=22"></script>
-<script src="shared.js?v=22"></script>
+<script src="states.js?v=23"></script>
+<script src="shared.js?v=23"></script>
 <script>
 const $ = id => document.getElementById(id);
 let lastEv = null, lastKey = '', lastPlateKey = '';
@@ -113,7 +113,7 @@ function finalSpot(s) {
     <div class="what">${esc(f.answers[id] || '(no answer)')}</div>
     <div class="bet">bet ${w}${m === true ? ` <b class="plus">RIGHT +${w}</b>` : m === false ? ` <b class="minus">WRONG −${w}</b>` : ''}</div></div>`;
 }
-const finShown = (s, id) => !s.fin || s.phase !== 'fjudge' || s.fin.order.indexOf(id) < s.fin.shown;
+const finShown = ppFinShown;
 function renderTeams(s) {
   const roundNames = { lobby: '', ready: 'Buzz-in round', running: 'Buzz-in round', buzzed: 'Buzz-in round', paused: 'Buzz-in round', revealed: 'Buzz-in round',
     speedready: 'Speed round', speed: 'Speed round', speedover: 'Speed round', final: 'Game over',
@@ -131,7 +131,7 @@ function renderTeams(s) {
       const m = s.fin.marks[t.id], w = s.fin.wagers[t.id] || 0;
       sub = esc(s.fin.answers[t.id] || '(no answer)') + (m === true ? ` <b class="plus">+${w}</b>` : m === false ? ` <b class="minus">−${w}</b>` : '');
     }
-    return `<div class="sign green d-team ${cls}" style="${teamStyle(t)}"><div class="n">${esc(t.name)}</div><div class="s">${finShown(s, t.id) ? t.score : (s.fin.base[t.id] ?? t.score)}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
+    return `<div class="sign green d-team ${cls}" style="${teamStyle(t)}"><div class="n">${esc(t.name)}</div><div class="s">${ppShownScore(s, t)}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
   }).join('');
 }
 

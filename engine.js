@@ -475,7 +475,7 @@ function createEngine(opts = {}) {
     step() { if (['revealed', 'fjudge'].includes(S.phase) && S.step < pieceCount(S.puzzles[S.cur])) S.step++; },
     stepAll() { if (['revealed', 'fjudge'].includes(S.phase)) S.step = pieceCount(S.puzzles[S.cur]); },
     finalMark({ teamId, right }) {
-      if (S.phase !== 'fjudge') return;
+      if (S.phase !== 'fjudge' && S.phase !== 'fanswer') return;   // can be marked as soon as an answer comes in
       const id = Number(teamId), r = right === true || right === 'true';
       if (S.fin.marks[id] === r) delete S.fin.marks[id]; else S.fin.marks[id] = r;   // tap again to unmark
       finalScore(id); fire(r ? 'correct' : 'wrong');
@@ -562,7 +562,10 @@ function createEngine(opts = {}) {
     answer(teamId, text) {
       const t = team(Number(teamId));
       if (S.phase !== 'fanswer' || !t) return { ok: false };
-      S.fin.answers[t.id] = String(text || '').trim().slice(0, 60);
+      const txt = String(text || '').trim().slice(0, 60);
+      // a team that changes its answer after the host marked it gets unmarked
+      if (S.fin.answers[t.id] !== txt && S.fin.marks[t.id] != null) { delete S.fin.marks[t.id]; finalScore(t.id); }
+      S.fin.answers[t.id] = txt;
       changed(); return { ok: true };
     },
     // a phone picks its colour; two teams can't share one

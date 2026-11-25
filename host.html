@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Host</title>
-<link rel="stylesheet" href="style.css?v=22">
+<link rel="stylesheet" href="style.css?v=23">
 </head>
 <body class="host-page">
 <div class="host">
@@ -87,11 +87,11 @@
   </div>
 </div>
 
-<script src="mode.js?v=22"></script>
+<script src="mode.js?v=23"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="engine.js?v=22"></script>
-<script src="states.js?v=22"></script>
-<script src="shared.js?v=22"></script>
+<script src="engine.js?v=23"></script>
+<script src="states.js?v=23"></script>
+<script src="shared.js?v=23"></script>
 <script>
 const $ = id => document.getElementById(id);
 const act = PP.act;
@@ -167,14 +167,16 @@ function finalPanel(s) {
   const rows = order.map((t, i) => {
     const w = f.wagers[t.id], a = f.answers[t.id], m = f.marks[t.id];
     if (s.phase === 'fwager') return `<tr><td>${esc(t.name)}</td><td>${w != null ? 'bet <b>' + w + '</b>' : '<span class="note">no bet yet</span>'}</td><td class="note">of ${Math.max(0, t.score)}</td></tr>`;
-    if (s.phase === 'fanswer') return `<tr><td>${esc(t.name)}</td><td>bet ${w || 0}</td><td>${a != null ? '<b>' + esc(a || '(blank)') + '</b>' : '<span class="note">typing…</span>'}</td></tr>`;
+    if (s.phase === 'fanswer') return `<tr class="${m === true ? 'right' : m === false ? 'wrongrow' : ''}"><td>${esc(t.name)}</td><td>bet ${w || 0}</td><td>${a != null ? '<b>' + esc(a || '(blank)') + '</b>' : '<span class="note">typing…</span>'}</td>
+      <td>${a != null ? `<button class="btn mini good" data-mark="${t.id}" data-right="1">${m === true ? '✓ Right' : 'Right'}</button>
+      <button class="btn mini bad" data-mark="${t.id}" data-right="0">${m === false ? '✗ Wrong' : 'Wrong'}</button>` : ''}</td></tr>`;
     const onScreen = i < f.shown;
     return `<tr class="${m === true ? 'right' : m === false ? 'wrongrow' : ''} ${onScreen ? '' : 'notyet'}"><td>${esc(t.name)}<div class="note">${onScreen ? 'on screen' : 'not shown yet'}</div></td><td><b>${esc(a || '(no answer)')}</b></td><td>bet ${w || 0}</td>
       <td><button class="btn mini good" data-mark="${t.id}" data-right="1">${m === true ? '✓ Right' : 'Right'}</button>
       <button class="btn mini bad" data-mark="${t.id}" data-right="0">${m === false ? '✗ Wrong' : 'Wrong'}</button></td><td class="score-cell">${t.score}</td></tr>`;
   }).join('');
   const head = s.phase === 'fwager' ? 'Teams bet on their phones (0 up to their score). Show the plate when everyone is in; no bet counts as 0.'
-    : s.phase === 'fanswer' ? 'Teams type their answers on their phones.' : 'Answers go on screen one team at a time, lowest score first (Space). Mark each one: right adds their bet, wrong takes it away. Tap again to unmark. Then reveal the real answer piece by piece.';
+    : s.phase === 'fanswer' ? "Teams type their answers on their phones. You can mark each one right or wrong as it comes in; nobody sees it until that team's answer goes on screen. If a team changes its answer, its mark is cleared." : 'Answers go on screen one team at a time, lowest score first (Space). Mark each one: right adds their bet, wrong takes it away. Tap again to unmark. Then reveal the real answer piece by piece.';
   return `<div class="note">${head}</div><table class="fin-table">${rows}</table>`;
 }
 

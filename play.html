@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0e1726">
 <title>Plate Pursuit · Buzzer</title>
-<link rel="stylesheet" href="style.css?v=22">
+<link rel="stylesheet" href="style.css?v=23">
 </head>
 <body class="phone-page">
 <div class="phone" id="app"></div>
-<script src="mode.js?v=22"></script>
+<script src="mode.js?v=23"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="shared.js?v=22"></script>
+<script src="shared.js?v=23"></script>
 <script>
 const app = document.getElementById('app');
 if (PP.needRoom('JOIN THE GAME')) throw new Error('waiting for room code');
@@ -123,7 +123,7 @@ function render(s) {
   $('nm').textContent = t.name;
   app.style.cssText = teamStyle(t);
   renderColors(s, t);
-  $('sc').textContent = t.score;
+  $('sc').textContent = ppShownScore(s, t);
   const b = $('buzz');
   let msg = '', enabled = false, mine = false, label = 'BUZZ';
   const locked = s.locked.includes(me.id);
@@ -206,10 +206,11 @@ let finalKey = '';
 function renderFinal(s, t) {
   const f = s.fin, el = document.getElementById('final');
   const w = f.wagers[me.id], a = f.answers[me.id], m = f.marks[me.id];
-  const key = s.phase + '|' + (s.phase === 'fjudge' ? [w, a, m].join('|') : '');
+  const shown = ppFinShown(s, me.id);
+  const key = s.phase + '|' + (s.phase === 'fjudge' ? [w, a, shown ? m : '', shown].join('|') : '');
   if (key === finalKey) { finalStatus(s); return; }
   finalKey = key;
-  const max = Math.max(0, t.score);
+  const max = Math.max(0, s.phase === 'fwager' ? t.score : ppShownScore(s, t));
   if (s.phase === 'fwager') {
     el.innerHTML = max > 0
       ? `<label class="p-label">Your bet (0 to ${max})</label>
@@ -244,7 +245,7 @@ function renderFinal(s, t) {
   } else {
     el.innerHTML = `<div class="p-label">Your answer</div><div class="p-answer">${esc(a || '(no answer)')}</div>
       <div class="p-label">Your bet: ${w || 0}</div>
-      <div class="p-result ${m === true ? 'good' : m === false ? 'bad' : ''}">${m === true ? `Right! +${w || 0}` : m === false ? `Not quite. −${w || 0}` : 'Waiting for the host…'}</div>`;
+      <div class="p-result ${shown && m === true ? 'good' : shown && m === false ? 'bad' : ''}">${!shown ? 'Watch the screen…' : m === true ? `Right! +${w || 0}` : m === false ? `Not quite. −${w || 0}` : 'Waiting for the host…'}</div>`;
   }
   finalStatus(s);
 }
