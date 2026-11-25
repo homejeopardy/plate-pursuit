@@ -382,8 +382,7 @@ body.crew-page { background: var(--asphalt); color: #fff; min-height: 100vh; }
   text-shadow: 0 .15cqw 0 rgba(255,255,255,.75); }
 .pf-top { height: 7.6cqw; font: 900 3.9cqw/1 var(--font); letter-spacing: .06em; }
 .pf-bot { height: 5cqw; font: 800 2.3cqw/1 var(--font); letter-spacing: .24em; color: #444a52; }
-.pf-top:has(img) { height: 13cqw; }
-.pf-top img { height: 11cqw; width: auto; max-width: 92%; display: block; filter: drop-shadow(0 .3cqw .2cqw rgba(0,0,0,.35)); }
+.pf-top img { height: 6.6cqw; width: auto; max-width: 92%; display: block; filter: drop-shadow(0 .3cqw .2cqw rgba(0,0,0,.35)); }
 .d-plate:has(.pframe) { width: min(56vw, 86vh); }
 .plate-top .pc { color: var(--pc); }
 .plate-top .st-wait { color: var(--plate-ink); }
@@ -440,3 +439,8 @@ body.crew-page { background: var(--asphalt); color: #fff; min-height: 100vh; }
 .p-team:disabled { opacity: .7; }
 .p-new[hidden] { display: none; }
 .p-new { display: grid; gap: 10px; }
+
+/* projector: the stage never pushes the team row off screen; fitStage() shrinks the plate to make room */
+.d-stage { min-height: 0; overflow: hidden; }
+.d-plate { flex: none; max-width: 100%; }
+.d-stage > * { flex-shrink: 0; }

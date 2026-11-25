@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Projector</title>
-<link rel="stylesheet" href="style.css?v=23">
+<link rel="stylesheet" href="style.css?v=24">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body class="display-page">
@@ -16,10 +16,10 @@
 <div class="unlock" id="unlock"><div class="sign green">Click to start the projector<small>Turns on sound and goes full screen</small></div></div>
 <div class="conn" id="conn"></div>
 
-<script src="mode.js?v=23"></script>
+<script src="mode.js?v=24"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="states.js?v=23"></script>
-<script src="shared.js?v=23"></script>
+<script src="states.js?v=24"></script>
+<script src="shared.js?v=24"></script>
 <script>
 const $ = id => document.getElementById(id);
 let lastEv = null, lastKey = '', lastPlateKey = '';
@@ -114,6 +114,24 @@ function finalSpot(s) {
     <div class="bet">bet ${w}${m === true ? ` <b class="plus">RIGHT +${w}</b>` : m === false ? ` <b class="minus">WRONG −${w}</b>` : ''}</div></div>`;
 }
 const finShown = ppFinShown;
+// Shrink the plate until everything on the stage (question, plate, answer or signs) fits on screen.
+function fitStage() {
+  const st = $('stage'), pl = st.querySelector('.d-plate'); if (!pl) return;
+  pl.style.width = '';
+  for (let i = 0; i < 3; i++) {
+    const cs = getComputedStyle(st), gap = parseFloat(cs.rowGap) || 0;
+    const kids = [...st.children], avail = st.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - 6;
+    const used = kids.reduce((a, k) => a + k.offsetHeight, 0) + gap * Math.max(0, kids.length - 1);
+    const over = used - avail; if (over <= 0) break;
+    const r = { width: pl.offsetWidth, height: pl.offsetHeight }; if (!r.height) break;   // offset sizes ignore the entrance animation
+    const h = Math.max(r.height * 0.25, r.height - over);
+    pl.style.width = (r.width * h / r.height) + 'px';
+  }
+  fitPlates();
+}
+if (window.ResizeObserver) new ResizeObserver(() => fitStage()).observe(document.getElementById('stage'));
+addEventListener('resize', fitStage);
+document.fonts && document.fonts.ready.then(fitStage);
 function renderTeams(s) {
   const roundNames = { lobby: '', ready: 'Buzz-in round', running: 'Buzz-in round', buzzed: 'Buzz-in round', paused: 'Buzz-in round', revealed: 'Buzz-in round',
     speedready: 'Speed round', speed: 'Speed round', speedover: 'Speed round', final: 'Game over',
@@ -169,7 +187,7 @@ PP.on(s => {
   else if (s.ev.n !== lastEv) { lastEv = s.ev.n; SFX.play(s.ev.type); }
   const k = stageKey(s);
   if (k !== lastKey) { lastKey = k; renderStage(s); }
-  renderTeams(s); tick();
+  renderTeams(s); tick(); fitStage();
 });
 PP.connect();
 </script>
