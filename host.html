@@ -4,12 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Host</title>
-<link rel="stylesheet" href="style.css?v=16">
+<link rel="stylesheet" href="style.css?v=17">
 </head>
 <body class="host-page">
 <div class="host">
   <div class="host-head"><div class="sign green">PLATE PURSUIT</div><span class="note" id="join"></span>
-    <button class="btn primary" id="openDisplay">Open projector window</button></div>
+    <div class="row"><button class="btn primary" id="openDisplay">Open projector window</button>
+      <button class="btn" id="openStage">Host script</button><button class="btn" id="openPointer">Pointer screen</button></div></div>
+  <div class="note crew" id="crew"></div>
 
   <div class="card">
     <h2 id="nowTitle">Now playing</h2>
@@ -85,16 +87,33 @@
   </div>
 </div>
 
-<script src="mode.js?v=16"></script>
+<script src="mode.js?v=17"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="engine.js?v=16"></script>
-<script src="shared.js?v=16"></script>
+<script src="engine.js?v=17"></script>
+<script src="shared.js?v=17"></script>
 <script>
 const $ = id => document.getElementById(id);
 const act = PP.act;
 let renderedPuzzleText = null, renderedSettings = '';
 
-$('openDisplay').onclick = () => window.open('display.html' + (PP.room ? '?room=' + PP.room : ''), 'pp-display', 'width=1280,height=720');
+const roomQ = () => (PP.room ? '?room=' + PP.room : '');
+$('openDisplay').onclick = () => window.open('display.html' + roomQ(), 'pp-display', 'width=1280,height=720');
+$('openStage').onclick = () => window.open('stage.html' + roomQ(), 'pp-stage', 'width=1100,height=800');
+$('openPointer').onclick = () => window.open('pointer.html' + roomQ(), 'pp-pointer', 'width=420,height=820');
+// what the Space bar / main button does next while an answer is being revealed
+function revealNext(s) {
+  const p = s.puzzles[s.cur];
+  if (s.phase === 'fjudge' && s.fin && s.fin.shown < s.fin.order.length) return 'finalNext';
+  if (['revealed', 'fjudge'].includes(s.phase) && s.step < pieceTotal(p)) return 'step';
+  return null;
+}
+function revealButtons(s, B) {
+  const p = s.puzzles[s.cur], n = revealNext(s);
+  if (n === 'finalNext') return B('finalNext', `Show answer: ${esc(teamName(s, s.fin.order[s.fin.shown]))}`, 'Space', 'primary');
+  if (n === 'step') { const pc = piecesOf(p)[s.step];
+    return B('step', pieceTotal(p) > 1 ? `Show piece ${s.step + 1} of ${pieceTotal(p)}: ${esc(pc.plate)}` : 'Show the answer', 'Space', 'primary') + (pieceTotal(p) > 1 ? B('stepAll', 'Show whole answer') : ''); }
+  return '';
+}
 document.querySelectorAll('[data-a]').forEach(b => b.onclick = () => act(b.dataset.a));
 $('addTeam').onclick = () => { const n = $('newTeam').value.trim(); if (n) { act('addTeam', { name: n }); $('newTeam').value = ''; } };
 $('newTeam').onkeydown = e => { if (e.key === 'Enter') $('addTeam').click(); };
@@ -123,13 +142,15 @@ function phaseControls(s, B) {
     case 'paused': return B('reopen', 'Reopen buzzers', 'Space', 'primary') + B('reveal', 'Reveal answer', 'R');
     case 'revealed': {
       const left = s.puzzles.length - s.used.length;   // the plate just played is already counted as used
+      const rv = revealButtons(s, B);
+      if (rv) return rv + (s.tb ? '' : B('next', 'Skip to next plate', 'N', '', left > 0));
       if (s.tb) return B('tiebreak', 'Another tie-breaker plate', '', 'primary', left > 0) + B('final', 'Final standings', left > 0 ? '' : 'Space', 'gold');
       return left > 0 ? B('next', 'Next plate', 'N / Space', 'primary')
         : `<span class="note">That was the last plate.</span>` + B('final', 'Final standings', 'Space', 'gold');
     }
     case 'fwager': return B('finalShow', 'Show final plate', 'Space', 'primary');
     case 'fanswer': return B('finalLock', 'Stop answers now', '', 'primary');
-    case 'fjudge': return B('final', 'Final standings', '', 'gold');
+    case 'fjudge': { const rv = revealButtons(s, B); return rv + B('final', 'Final standings', rv ? '' : 'Space', 'gold'); }
     case 'speedready': return B('speedStart', 'Start 60 seconds', 'Space', 'primary');
     case 'speed': return B('correct', 'Correct', 'C', 'good') + B('pass', 'Pass', 'P', 'bad') + B('speedStop', 'Stop clock');
     case 'speedover': return B('next', 'Back to buzz-in plates', 'N', 'primary') + B('final', 'Final standings', '', 'gold');
@@ -141,16 +162,18 @@ function phaseControls(s, B) {
 // The final plate on the host page: bets, then answers, then right/wrong buttons per team.
 function finalPanel(s) {
   const f = s.fin;
-  const rows = s.teams.map(t => {
+  const order = s.phase === 'fjudge' && f.order && f.order.length ? f.order.map(id => s.teams.find(t => t.id === id)).filter(Boolean) : s.teams;
+  const rows = order.map((t, i) => {
     const w = f.wagers[t.id], a = f.answers[t.id], m = f.marks[t.id];
     if (s.phase === 'fwager') return `<tr><td>${esc(t.name)}</td><td>${w != null ? 'bet <b>' + w + '</b>' : '<span class="note">no bet yet</span>'}</td><td class="note">of ${Math.max(0, t.score)}</td></tr>`;
     if (s.phase === 'fanswer') return `<tr><td>${esc(t.name)}</td><td>bet ${w || 0}</td><td>${a != null ? '<b>' + esc(a || '(blank)') + '</b>' : '<span class="note">typing…</span>'}</td></tr>`;
-    return `<tr class="${m === true ? 'right' : m === false ? 'wrongrow' : ''}"><td>${esc(t.name)}</td><td><b>${esc(a || '(no answer)')}</b></td><td>bet ${w || 0}</td>
+    const onScreen = i < f.shown;
+    return `<tr class="${m === true ? 'right' : m === false ? 'wrongrow' : ''} ${onScreen ? '' : 'notyet'}"><td>${esc(t.name)}<div class="note">${onScreen ? 'on screen' : 'not shown yet'}</div></td><td><b>${esc(a || '(no answer)')}</b></td><td>bet ${w || 0}</td>
       <td><button class="btn mini good" data-mark="${t.id}" data-right="1">${m === true ? '✓ Right' : 'Right'}</button>
       <button class="btn mini bad" data-mark="${t.id}" data-right="0">${m === false ? '✗ Wrong' : 'Wrong'}</button></td><td class="score-cell">${t.score}</td></tr>`;
   }).join('');
   const head = s.phase === 'fwager' ? 'Teams bet on their phones (0 up to their score). Show the plate when everyone is in; no bet counts as 0.'
-    : s.phase === 'fanswer' ? 'Teams type their answers on their phones.' : 'Mark each team. Right adds their bet, wrong takes it away. Tap again to unmark.';
+    : s.phase === 'fanswer' ? 'Teams type their answers on their phones.' : 'Answers go on screen one team at a time, lowest score first (Space). Mark each one: right adds their bet, wrong takes it away. Tap again to unmark. Then reveal the real answer piece by piece.';
   return `<div class="note">${head}</div><table class="fin-table">${rows}</table>`;
 }
 
@@ -168,6 +191,8 @@ function render(s) {
     $('newRoom').onclick = () => { if (confirm('Switch to a new room code? The projector and every phone will need the new code.')) PP.newRoom(); };
   }
 
+  const base = location.href.replace(/[^/]*$/, ''), rq = s.room ? '?room=' + s.room : '';
+  $('crew').innerHTML = `Host script: <b>${esc(base + 'stage.html' + rq)}</b> · Pointer: <b>${esc(base + 'pointer.html' + rq)}</b> <span>(open these on a tablet or phone)</span>`;
   const phaseNames = { lobby: 'Join screen', ready: 'Plate is covered', running: 'Clock running', buzzed: 'Buzzed in', paused: 'Waiting for you to reopen buzzing', revealed: 'Answer shown',
     speedready: 'Speed round ready', speed: 'Speed round running', speedover: 'Speed round over', final: 'Final standings',
     fwager: 'Final plate: teams are betting', fanswer: 'Final plate: teams are typing answers', fjudge: 'Final plate: mark each answer' };
@@ -175,6 +200,8 @@ function render(s) {
   const showPlate = p && !['lobby', 'final', 'speedready'].includes(s.phase);
   $('hPlate').innerHTML = plateHTML(showPlate ? p.plate : '', { cls: s.phase === 'ready' ? 'covered' : '' });
   $('hAnswer').textContent = showPlate ? p.answer : '';
+  if (showPlate && ['revealed', 'fjudge'].includes(s.phase) && pieceTotal(p) > 1)
+    $('hAnswer').insertAdjacentHTML('beforeend', `<div class="note">On screen: ${Math.min(s.step, pieceTotal(p))} of ${pieceTotal(p)} pieces</div>`);
   $('hCat').innerHTML = showPlate ? esc(p.cat) + (p.hint ? ' · ' + esc(p.hint) : '') + (p.double && !s.tb ? ' <span class="h-double">Double points</span>' : '') : '';
   let status = '';
   if (s.phase === 'buzzed') status = `<b>${esc(teamName(s, s.buzzed))}</b> buzzed in for ${s.valueAtBuzz} points`;
@@ -257,6 +284,9 @@ document.addEventListener('keydown', e => {
     else if (s.phase === 'paused') act('reopen');
     else if (s.phase === 'fwager') act('finalShow');
     else if (s.phase === 'speedready') act('speedStart');
+    else if (revealNext(s)) act(revealNext(s));               // next team's final answer, or next piece of the answer
+    else if (s.phase === 'fjudge') act('final');
+    else if (s.phase === 'revealed' && s.tb) {}
     else if (s.phase === 'revealed' && s.used.length >= s.puzzles.length) act('final');   // no plates left
     else if (['lobby', 'revealed'].includes(s.phase)) act('next');
   }

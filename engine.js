@@ -5,45 +5,46 @@ function createEngine(opts = {}) {
   const changed = () => { S.undoLabel = history.length ? history[history.length - 1].label : null; opts.persist && opts.persist(S); opts.onChange && opts.onChange(); };
   const history = [];   // undo stack (in memory only)
   const DEFAULT_PUZZLES = `## What does it say?
-  EZ PZ | Easy peasy | EZ=Easy, PZ=peasy
-  XLR8 | Accelerate | X=Ac, L=cel, R=er, 8=ate
-  4GTFUL | Forgetful | 4=For, GT=get, FUL=ful
-  YYURYYUB | Too wise you are, too wise you be | YY=Too wise, U=you, R=are, YY=too wise, U=you, B=be
-  1DRFUL | Wonderful | 1=Won, DR=der, FUL=ful
-  NE1 HOME | Anyone home? | NE=Any, 1=one, HOME=home
-  L8 AGAIN | Late again | L8=Late, AGAIN=again
-  2COOL4U | Too cool for you | 2=Too, COOL=cool, 4=for, U=you
-  W8 4 ME | Wait for me | W8=Wait, 4=for, ME=me
-  4TUN8 | Fortunate | 4=For, TUN=tun, 8=ate
-  NVR L8 | Never late | NVR=Never, L8=late
-  IOU 0 | I owe you nothing | I=I, O=owe, U=you, 0=nothing
-  QT PIE | Cutie pie | QT=Cutie, PIE=pie
-  ICU2 | I see you too | I=I, C=see, U=you, 2=too
-  RU HNGRY | Are you hungry? | R=Are, U=you, HNGRY=hungry
-  GR8 DAY | Great day | GR8=Great, DAY=day
-  SK8 4EVR | Skate forever | SK8=Skate, 4=for, EVR=ever
-  OWE NO1 | Owe no one | OWE=Owe, NO=no, 1=one
-  Y B L8 | Why be late? | Y=Why, B=be, L8=late
-  BCNU | Be seeing you | B=Be, C=see, N=ing, U=you
-  XQZIT | Exquisite | X=Ex, Q=qui, ZIT=site
-  MT POCKT | Empty pocket | MT=Empty, POCKT=pocket
-  XPNSV | Expensive | X=Ex, PN=pen, SV=sive
-  AV8R | Aviator | AV=Avi, 8=at, R=or
-  GR8FUL | Grateful | GR8=Grate, FUL=ful
-  2B1ASK1 | To be one, ask one | 2=To, B=be, 1=one, ASK=ask, 1=one
-  10TATIV | Tentative | 10=Ten, TATIV=tative
-  CU@ BCH | See you at the beach | C=See, U=you, @=at, BCH=beach
-  MOOV OVR | Move over | hint: On a cow-print car | MOOV=Move, OVR=over
-  ENUF SNO | Enough snow | ENUF=Enough, SNO=snow
-  CUZ ICAN | 'Cause I can | CUZ='Cause, I=I, CAN=can
-  SAY CHZ | Say cheese | SAY=Say, CHZ=cheese
-  O2B HOME | Oh, to be home | O=Oh, 2=to, B=be, HOME=home
-  NVUS | Envious | NV=Envi, US=ous
-  L8 NITE | Late night | L8=Late, NITE=night
-  PB N J | Peanut butter and jelly | P=Peanut, B=butter, N=and, J=jelly
-  H8 TRAFC | I hate traffic | H8=hate, TRAFC=traffic
-  XCELLNT | Excellent | X=Ex, CELL=cell, NT=ent
-  2MUCH2DO | Too much to do | 2=Too, MUCH=much, 2=to, DO=do`;
+  XQZME | Excuse me | X=Ex, QZ=cuse, ME=me
+  EZ4U2C | Easy for you to see | EZ=Easy, 4=for, U=you, 2=to, C=see
+  NOT2NITE | Not tonight | NOT=Not, 2=to, NITE=night
+  IH8MNDAZ | I hate Mondays | I=I, H8=hate, MNDAZ=Mondays
+  RUOK2DRV | Are you okay to drive? | R=Are, U=you, OK=okay, 2=to, DRV=drive
+  XLNC | Excellence | X=Ex, L=cel, N=len, C=ce
+  NRG4U | Energy for you | NRG=Energy, 4=for, U=you
+  LUV2SK8 | Love to skate | LUV=Love, 2=to, SK8=skate
+  GONE4GD | Gone for good | GONE=Gone, 4=for, GD=good
+  IOU1MOR | I owe you one more | I=I, O=owe, U=you, 1=one, MOR=more
+  QTP2T | Cutie patootie | QT=Cutie, P=pa, 2=too, T=tie
+  XPRT | Expert | X=Ex, P=p, RT=ert
+  1DRWMN | Wonder Woman | 1=Won, DR=der, WMN=Woman
+  YRUL8 | Why are you late? | Y=Why, R=are, U=you, L8=late
+  2L8 4ME | Too late for me | 2=Too, L8=late, 4=for, ME=me
+  RTST | Artist | RT=Art, ST=ist
+  NSANE | Insane | N=In, SANE=sane
+  2THDK | Tooth decay | 2TH=Tooth, DK=decay
+  ICUR2BZ | I see you're too busy | I=I, C=see, UR=you're, 2=too, BZ=busy
+  LTL OL ME | Little old me | LTL=Little, OL=old, ME=me
+  CR8TIV | Creative | CR8=Crea, TIV=tive
+  4EVR YNG | Forever young | 4=For, EVR=ever, YNG=young
+  B9 | Benign | B=Be, 9=nign
+  N8IV | Native | N8=Nat, IV=ive
+  U4IA | Euphoria | U=Eu, 4=pho, IA=ria
+  NML | Animal | N=An, M=im, L=al
+  OBDNT | Obedient | O=O, B=be, D=di, NT=ent
+  DSPR8 | Desperate | DSP=Desp, R=er, 8=ate
+  1DRLND | Wonderland | 1=Won, DR=der, LND=land
+  AT10SHN | Attention | AT=At, 10=ten, SHN=tion
+  4GV ME | Forgive me | 4=For, GV=give, ME=me
+  0 2 60 | Zero to sixty | 0=Zero, 2=to, 60=sixty
+  NE1 4 10S | Anyone for tennis? | NE1=Anyone, 4=for, 10=ten, S=nis
+  BYND | Beyond | B=Be, YND=yond
+  NFO | Info | N=In, FO=fo
+  MT NST | Empty nest | MT=Empty, NST=nest
+  IM2GUD4U | I'm too good for you | IM=I'm, 2=too, GUD=good, 4=for, U=you
+  DCSN | Decision | D=De, C=ci, SN=sion
+  10DR | Tender | 10=Ten, DR=der
+  SEZ U | Says you | SEZ=Says, U=you`;
   
   // "PLATE | answer | x2" marks a double-points plate
   const isDouble = f => /^(x2|2x|double)$/i.test(String(f).trim());
@@ -114,7 +115,7 @@ function createEngine(opts = {}) {
       used: [], cur: null, elapsed: 0, runningSince: null,
       buzzed: null, locked: [], valueAtBuzz: 0, result: null,
       speed: null, settings: { ...DEFAULT_SETTINGS }, ev: { n: 0, type: null },
-      fin: null, tb: null, tbWinner: null, undoLabel: null,
+      fin: null, tb: null, tbWinner: null, undoLabel: null, step: 0,
     };
   }
   
@@ -180,6 +181,13 @@ function createEngine(opts = {}) {
       }
     }
   }
+  // 2026-11-25: the user asked for harder plates, replacing the whole starter list. A saved game still on
+  // the old starter list gets the new one; scores and teams stay, and every plate becomes unplayed.
+  if (/^\s*YYURYYUB\s*\|/m.test(S.puzzleText || '') && !/^\s*XQZME\s*\|/m.test(S.puzzleText || '')) {
+    S.puzzleText = DEFAULT_PUZZLES; S.puzzles = parsePuzzles(DEFAULT_PUZZLES); S.used = []; S.cur = null;
+    if (!['lobby', 'final'].includes(S.phase)) S.phase = 'lobby';
+    setTimeout(() => opts.persist && opts.persist(S), 0);
+  }
   // Saved lists from before plate pieces were coloured: add the starter mapping to starter lines that have none.
   {
     const starter = {};
@@ -224,7 +232,7 @@ function createEngine(opts = {}) {
   function loadPlate(i) {
     if (i == null || !S.puzzles[i]) return;
     S.cur = i; S.phase = 'ready'; S.elapsed = 0; S.runningSince = null;
-    S.buzzed = null; S.locked = []; S.result = null;
+    S.buzzed = null; S.locked = []; S.result = null; S.step = 0;
   }
   let speedTimer = null;
   function endSpeed() {
@@ -250,7 +258,8 @@ function createEngine(opts = {}) {
     timeout: 'Time ran out', reopen: 'Reopen buzzing', reveal: 'Reveal', pass: 'Pass', speedReady: 'Set up speed round',
     speedStart: 'Start speed round', speedStop: 'Stop speed round', final: 'Final standings', lobby: 'Join screen',
     score: 'Score change', toggleDouble: 'Double points', removeTeam: 'Remove team', finalStart: 'Final wager plate', finalShow: 'Show final plate',
-    finalLock: 'Lock answers', finalMark: 'Mark final answer', tiebreak: 'Tie-breaker plate' };
+    finalLock: 'Lock answers', finalMark: 'Mark final answer', tiebreak: 'Tie-breaker plate',
+    step: 'Reveal piece', stepAll: 'Whole answer', finalNext: 'Show team answer' };
   function record(type) {
     if (!UNDO_LABELS[type]) return false;
     const c = JSON.parse(JSON.stringify(S));
@@ -356,7 +365,7 @@ function createEngine(opts = {}) {
     finalStart() {
       const i = nextUnused(S.cur); if (i == null) return;
       freeze(); S.cur = i; S.buzzed = null; S.locked = []; S.result = null; S.tb = null;
-      S.fin = { wagers: {}, answers: {}, marks: {}, base: {}, endsAt: null };
+      S.fin = { wagers: {}, answers: {}, marks: {}, base: {}, endsAt: null, order: [], shown: 0 }; S.step = 0;
       S.phase = 'fwager'; fire('start');
     },
     finalShow() {
@@ -367,8 +376,14 @@ function createEngine(opts = {}) {
     },
     finalLock() {
       if (S.phase !== 'fanswer') return;
-      S.fin.endsAt = null; markUsed(S.cur); S.phase = 'fjudge'; fire('reveal');
+      S.fin.endsAt = null; markUsed(S.cur); S.phase = 'fjudge'; S.step = 0; fire('reveal');
+      // teams' answers are shown one at a time, lowest score first
+      S.fin.order = [...S.teams].sort((a, b) => (S.fin.base[a.id] ?? a.score) - (S.fin.base[b.id] ?? b.score)).map(t => t.id); S.fin.shown = 0;
     },
+    finalNext() { if (S.phase === 'fjudge' && S.fin.shown < S.fin.order.length) { S.fin.shown++; fire('buzz'); } },
+    // reveal the answer one piece of the plate at a time
+    step() { if (['revealed', 'fjudge'].includes(S.phase) && S.step < pieceCount(S.puzzles[S.cur])) S.step++; },
+    stepAll() { if (['revealed', 'fjudge'].includes(S.phase)) S.step = pieceCount(S.puzzles[S.cur]); },
     finalMark({ teamId, right }) {
       if (S.phase !== 'fjudge') return;
       const id = Number(teamId), r = right === true || right === 'true';
@@ -417,6 +432,14 @@ function createEngine(opts = {}) {
     },
   };
   
+  // how many steps the answer reveals in: one per piece, or one for a plate without a usable mapping
+  function pieceCount(q) {
+    if (!q) return 0;
+    if (!q.parts) return 1;
+    let i = 0;
+    for (const [k] of q.parts) { while (q.plate[i] === ' ') i++; if (q.plate.slice(i, i + k.length) !== k) return 1; i += k.length; }
+    return q.parts.length;
+  }
   function freeColor() {
     const used = S.teams.map(t => t.color);
     return COLORS.find(c => !used.includes(c)) || COLORS[S.teams.length % COLORS.length];

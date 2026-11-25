@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#262626">
+<title>Plate Pursuit · Pointer</title>
+<link rel="stylesheet" href="style.css?v=17">
+</head>
+<body class="crew-page">
+<div class="pt-wrap" id="app">
+  <div class="cr-top"><div class="sign green cr-title">POINTER</div><div class="cr-meta" id="meta"></div></div>
+  <div class="pt-plate" id="plate"></div>
+  <div class="pt-card" id="card"></div>
+  <ol class="cr-pieces pt-list" id="pieces"></ol>
+  <div class="cr-conn" id="conn"></div>
+</div>
+<script src="mode.js?v=17"></script>
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script src="shared.js?v=17"></script>
+<script>
+const $ = id => document.getElementById(id);
+if (PP.needRoom('POINTER')) throw new Error('waiting for room code');
+
+// The big card always says what the next piece of the plate means, so the person pointing knows where to point.
+function card(s) {
+  const p = s.puzzles[s.cur] || null, pcs = piecesOf(p), total = pcs.length;
+  const big = (label, pc, note) => `<div class="pt-label">${label}</div>
+    <div class="pt-piece"><span class="pc c${pc.color}">${esc(pc.plate)}</span></div>
+    <div class="pt-label">means</div><div class="pt-means"><span class="pc c${pc.color}">${esc(pc.means)}</span></div>
+    ${note ? `<div class="pt-note">${note}</div>` : ''}`;
+  const msg = (t, sub = '') => `<div class="pt-msg">${t}</div>${sub ? `<div class="pt-note">${sub}</div>` : ''}`;
+  switch (s.phase) {
+    case 'lobby': return msg('Waiting for the first plate.', 'This screen will tell you what each piece of the plate means, one at a time, as the answer is revealed.');
+    case 'final': return msg('Game over.', 'Point at the winner!');
+    case 'speedready': return msg('Speed round coming up.');
+    case 'speed': return p ? `<div class="pt-label">Answer</div><div class="pt-means">${esc(p.answer)}</div>` : '';
+    case 'speedover': return msg('Speed round over.');
+    case 'fwager': return msg('Teams are betting.', total ? `When the answer is revealed, you'll start with <b>${esc(pcs[0].plate)}</b> = ${esc(pcs[0].means)}.` : '');
+  }
+  if (!p) return '';
+  if (['revealed', 'fjudge'].includes(s.phase)) {
+    if (s.phase === 'fjudge' && s.fin && s.fin.shown < s.fin.order.length)
+      return big(`Teams' answers first (${s.fin.shown} of ${s.fin.order.length} shown). Then point at`, pcs[0]);
+    if (s.step < total) return big(total > 1 ? `Next: piece ${s.step + 1} of ${total}. Point at` : 'Next: point at the whole plate', pcs[s.step]);
+    return msg(`All done: <b>${esc(p.answer)}</b>`, s.phase === 'fjudge' ? 'Final standings are next.' : 'Next plate coming up.');
+  }
+  // plate in play: say what the first piece will be once it's revealed
+  return big(total > 1 ? `When the answer is revealed, piece 1 of ${total}. Point at` : 'When the answer is revealed, point at the whole plate', pcs[0], `Answer: <b>${esc(p.answer)}</b>`);
+}
+
+let lastKey = '';
+function render(s) {
+  $('conn').textContent = PP.status || (PP.connected ? '' : 'Connecting…');
+  if (!s) return;
+  const key = JSON.stringify([s.phase, s.cur, s.step, s.fin && s.fin.shown, s.puzzles[s.cur]]);
+  if (key === lastKey) return;
+  lastKey = key;
+  const p = s.puzzles[s.cur] || null, pcs = piecesOf(p);
+  const revealing = ['revealed', 'fjudge'].includes(s.phase) && !(s.phase === 'fjudge' && s.fin && s.fin.shown < s.fin.order.length);
+  const showPlate = p && !['lobby', 'final', 'speedready', 'fwager'].includes(s.phase);
+  $('plate').innerHTML = showPlate ? plateHTML(p.plate, { parts: p.parts, step: revealing ? s.step : 0 }) : '';
+  $('card').innerHTML = card(s);
+  $('pieces').innerHTML = showPlate && pcs.length > 1 && !s.phase.startsWith('speed') ? pcs.map((pc, i) => `<li class="${revealing && i < s.step ? 'done' : ''} ${(revealing ? s.step : 0) === i ? 'next' : ''}">
+    <span class="pc c${pc.color}">${esc(pc.plate)}</span> = <span class="pc c${pc.color}">${esc(pc.means)}</span></li>`).join('') : '';
+  $('meta').textContent = p && showPlate ? p.plate : '';
+}
+PP.on(render);
+PP.connect();
+</script>
+</body>
+</html>

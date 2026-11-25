@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#262626">
+<title>Plate Pursuit · Host script</title>
+<link rel="stylesheet" href="style.css?v=17">
+</head>
+<body class="crew-page">
+<div class="crew-wrap" id="app">
+  <div class="cr-top"><div class="sign green cr-title">HOST SCRIPT</div><div class="cr-meta" id="meta"></div><div class="cr-clock" id="clock"></div></div>
+  <div class="cr-buzz" id="buzz" hidden></div>
+  <div class="cr-grid">
+    <section class="cr-card cr-say"><h2>Say</h2><div id="say"></div></section>
+    <section class="cr-card"><h2>Answer</h2><div class="cr-plate" id="plate"></div><div class="cr-ans" id="ans"></div><ol class="cr-pieces" id="pieces"></ol></section>
+  </div>
+  <div class="cr-scores" id="scores"></div>
+  <div class="cr-conn" id="conn"></div>
+</div>
+<script src="mode.js?v=17"></script>
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script src="shared.js?v=17"></script>
+<script>
+const $ = id => document.getElementById(id);
+if (PP.needRoom('HOST SCRIPT')) throw new Error('waiting for room code');
+
+const tn = (s, id) => `<b class="tname" style="${teamStyle(s.teams.find(t => t.id === id))}">${esc(teamName(s, id))}</b>`;
+const list = (s, ids) => ids.map(id => tn(s, id)).join(ids.length > 2 ? ', ' : ' and ');
+
+// The lines the on-stage host reads out, for whatever is happening right now.
+function script(s) {
+  const p = s.puzzles[s.cur] || {}, pcs = piecesOf(p), total = pcs.length;
+  const num = s.used.length + (['revealed', 'fjudge'].includes(s.phase) ? 0 : 1);
+  const dbl = p.double && !s.tb;
+  const breakdown = () => {
+    if (s.step === 0) return [`Let's break it down.`];
+    if (total === 1) return [`It says: <b>${esc(p.answer)}</b>!`];
+    const pc = pcs[Math.min(s.step, total) - 1];
+    const lines = [`<span class="pc c${pc.color}">${esc(pc.plate)}</span> means <span class="pc c${pc.color}">${esc(pc.means)}</span>.`];
+    if (s.step >= total) lines.push(`So it says: <b>${esc(p.answer)}</b>!`);
+    return lines;
+  };
+  switch (s.phase) {
+    case 'lobby': return [`Welcome to <b>Plate Pursuit</b>!`, `Grab a phone, scan the code on the screen, and join with your team name.`,
+      s.teams.length ? `We've got ${s.teams.length} team${s.teams.length > 1 ? 's' : ''}: ${list(s, s.teams.map(t => t.id))}.` : `Waiting for the first team to join.`];
+    case 'ready':
+      if (s.tb) return [`It's a <b>tie-breaker</b>! ${list(s, s.tb.teams)}, this one is just for you.`, `First right answer wins. Hands on your buzzers.`];
+      return [`Plate ${num} of ${s.puzzles.length}.${dbl ? ` This one is worth <b>double points</b>!` : ''}`,
+        `${esc(p.cat || 'What does it say?')}${p.hint ? ` Here's a clue: <b>${esc(p.hint)}</b>.` : ''}`,
+        `Buzz in as soon as you know it. The faster you answer, the more it's worth.`];
+    case 'running': return [`${esc(p.cat || 'What does it say?')}`, `It's worth <b id="liveVal">${ppValue(s)}</b> points right now, and dropping…`];
+    case 'buzzed': return [`${tn(s, s.buzzed)}, you buzzed in!`, `What does it say?`, `<span class="cr-check">Listen for: <b>${esc(p.answer)}</b></span>`];
+    case 'paused': return [`Ooh, not quite!`, s.tb ? `` : `${list(s, s.locked)} can't buzz on this one.`, `Everyone else, get ready… buzzers open in a moment.`].filter(Boolean);
+    case 'revealed': {
+      const head = s.result && s.result.tiebreak ? [`That's it! ${tn(s, s.result.teamId)} <b>wins the tie-breaker</b>!`]
+        : s.result ? [`That's right! ${tn(s, s.result.teamId)} takes <b>${s.result.points}</b> points.`] : [`Nobody got that one!`];
+      return head.concat(breakdown());
+    }
+    case 'speedready': return [`${tn(s, s.speed.teamId)}, it's the <b>speed round</b>!`, `You have ${Math.round(s.settings.speedSeconds)} seconds to solve as many plates as you can.`, `Stuck? Say pass. Ready… go!`];
+    case 'speed': return [`Read it!`, `<span class="cr-check">Listen for: <b>${esc(p.answer)}</b></span>`, `${s.speed.count} solved so far.`];
+    case 'speedover': return [`Time's up! ${tn(s, s.speed.teamId)} solved <b>${s.speed.count}</b>.`];
+    case 'fwager': return [`It's the <b>final plate</b>!`, `Look at your score and bet as much of it as you like on your phone.`,
+      `Get it right and you win your bet. Get it wrong and you lose it.`, `The question is: <b>${esc(p.cat || 'What does it say?')}</b>`];
+    case 'fanswer': return [`Here's the final plate.`, `Type your answer on your phone. You have ${Math.round(s.settings.finalSeconds)} seconds!`];
+    case 'fjudge': {
+      const f = s.fin;
+      if (!f.shown) return [`Time's up! Let's see what you wrote, starting with the lowest score.`];
+      if (f.shown <= f.order.length && (f.shown < f.order.length || s.step === 0)) {
+        const id = f.order[f.shown - 1], t = s.teams.find(x => x.id === id) || {}, w = f.wagers[id] || 0, m = f.marks[id];
+        const lines = [`${tn(s, id)} wrote: <b>“${esc(f.answers[id] || 'nothing')}”</b>`];
+        if (m === true) lines.push(`That's right! They bet ${w}, so they go up to <b>${t.score}</b>.`);
+        else if (m === false) lines.push(`Not quite. They bet ${w}, so they drop to <b>${t.score}</b>.`);
+        else lines.push(`<span class="cr-check">Wait for the right/wrong call. They bet ${w}.</span>`);
+        if (f.shown === f.order.length && m != null) lines.push(`Now, the real answer…`);
+        return lines;
+      }
+      return [`The answer was…`].concat(breakdown().filter(l => !l.startsWith("Let's")));
+    }
+    case 'final': {
+      const r = ppRanking(s), top = r.filter(x => x.rank === 1);
+      if (!top.length) return [`That's the game!`];
+      if (top.length > 1) return [`It's a tie! ${list(s, top.map(x => x.team.id))} are tied with ${top[0].team.score}.`, `Time for a tie-breaker!`];
+      return [`And the winner is…`, `${tn(s, top[0].team.id)} with <b>${top[0].team.score}</b> points!`, `Thanks for playing Plate Pursuit!`];
+    }
+  }
+  return [];
+}
+
+let lastKey = '';
+function render(s) {
+  $('conn').textContent = PP.status || (PP.connected ? '' : 'Connecting…');
+  if (!s) return;
+  const p = s.puzzles[s.cur] || null, pcs = piecesOf(p);
+  const key = JSON.stringify([s.phase, s.cur, s.buzzed, s.result, s.step, s.locked, s.fin, s.teams, s.tb, s.speed && s.speed.count]);
+  if (key !== lastKey) {
+    lastKey = key;
+    $('say').innerHTML = script(s).map(l => `<p>${l}</p>`).join('');
+    const showPlate = p && !['lobby', 'final', 'speedready'].includes(s.phase);
+    $('plate').innerHTML = showPlate ? plateHTML(p.plate, { parts: p.parts }) : '';
+    $('ans').innerHTML = showPlate ? `<b>${esc(p.answer)}</b>${p.hint ? `<div class="cr-hint">Clue: ${esc(p.hint)}</div>` : ''}` : '';
+    const revealing = ['revealed', 'fjudge'].includes(s.phase);
+    $('pieces').innerHTML = showPlate && pcs.length > 1 ? pcs.map((pc, i) => `<li class="${revealing && i < s.step ? 'done' : ''} ${revealing && i === s.step ? 'next' : ''}">
+      <span class="pc c${pc.color}">${esc(pc.plate)}</span> = <span class="pc c${pc.color}">${esc(pc.means)}</span></li>`).join('') : '';
+    $('scores').innerHTML = s.teams.map(t => `<div class="sign green d-team ${s.phase === 'buzzed' && s.buzzed === t.id ? 'buzzed' : ''}" style="${teamStyle(t)}"><div class="n">${esc(t.name)}</div><div class="s">${t.score}</div></div>`).join('');
+    const names = { lobby: 'Join screen', ready: 'Buzz-in', running: 'Buzz-in', buzzed: 'Buzz-in', paused: 'Buzz-in', revealed: 'Buzz-in',
+      speedready: 'Speed round', speed: 'Speed round', speedover: 'Speed round', fwager: 'Final plate', fanswer: 'Final plate', fjudge: 'Final plate', final: 'Game over' };
+    $('meta').textContent = (s.tb && !['final', 'lobby'].includes(s.phase) ? 'Tie-breaker' : names[s.phase] || '') + (p && ['ready', 'running', 'buzzed', 'paused', 'revealed'].includes(s.phase) && !s.tb ? ` · plate ${s.used.length + (s.phase === 'revealed' ? 0 : 1)} of ${s.puzzles.length}` : '');
+  }
+  tick();
+}
+// who buzzed + clocks, every 100 ms
+function tick() {
+  const s = PP.state; if (!s) return;
+  const b = $('buzz');
+  if (s.phase === 'buzzed') {
+    const t = s.teams.find(x => x.id === s.buzzed);
+    b.hidden = false; b.style.cssText = teamStyle(t);
+    b.innerHTML = `<div><small>BUZZED IN</small>${esc(t ? t.name : '')}</div><div class="cr-cd">${s.answerEndsAt ? Math.ceil(ppAnswerLeft(s)) : ''}</div>`;
+  } else b.hidden = true;
+  let c = '';
+  if (s.phase === 'running' || s.phase === 'paused') c = ppValue(s) + ' pts';
+  else if (s.phase === 'buzzed') c = s.valueAtBuzz + ' pts';
+  else if (s.phase === 'speed') c = Math.ceil(ppSpeedLeft(s)) + 's';
+  else if (s.phase === 'fanswer' && ppFinalLeft(s) != null) c = Math.ceil(ppFinalLeft(s)) + 's';
+  $('clock').textContent = c;
+  const lv = $('liveVal'); if (lv) lv.textContent = ppValue(s);
+}
+setInterval(tick, 100);
+PP.on(render);
+PP.connect();
+</script>
+</body>
+</html>

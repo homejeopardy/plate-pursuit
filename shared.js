@@ -284,43 +284,69 @@ function plateHTML(text, opts = {}) {
     <i class="slot l"></i><i class="slot r"></i>
     <span class="sticker l">11</span><span class="sticker r">27</span>
     <div class="plate-top">${opts.top || 'Puzzle State'}</div>
-    <div class="plate-text"><span>${(opts.parts && platePiecesHTML(text, opts.parts)) || esc(text) || '&nbsp;'}</span></div>
+    <div class="plate-text"><span>${(opts.parts && platePiecesHTML(text, opts.parts, opts.step)) || esc(text) || '&nbsp;'}</span></div>
     <div class="plate-bottom">${opts.bottom || 'LAND OF VANITY PLATES'}</div>
   </div>`;
 }
 
 // Stretch the characters across the plate. Letters are sized to the plate's height
 // in CSS; here they're squeezed (long plates) or spaced out (short ones) to fill the width.
-// ---- colour-matching the plate's pieces to the words they stand for
+// ---- colour-matching the plate's pieces to the words they stand for, revealed one piece at a time
 const PIECE_COLORS = 6;
 function pieceColor(parts) {   // same piece of plate -> same colour (both YYs in YYURYYUB match)
   const keys = [];
   return parts.map(([k]) => { if (!keys.includes(k)) keys.push(k); return keys.indexOf(k) % PIECE_COLORS; });
 }
-function platePiecesHTML(plate, parts) {
-  const col = pieceColor(parts); let i = 0, html = '';
+// [{t, n}] where n is the piece number, or -1 for spaces/leftovers. null if the pieces don't spell the plate.
+function plateSegments(plate, parts) {
+  if (!parts) return null;
+  plate = String(plate || ''); let i = 0; const out = [];
   for (let n = 0; n < parts.length; n++) {
-    while (plate[i] === ' ') { html += ' '; i++; }
+    while (plate[i] === ' ') { out.push({ t: ' ', n: -1 }); i++; }
     const k = parts[n][0];
-    if (plate.slice(i, i + k.length) !== k) return null;   // mapping doesn't fit this plate: show it plain
-    html += `<span class="pc c${col[n]}">${esc(k)}</span>`; i += k.length;
+    if (plate.slice(i, i + k.length) !== k) return null;
+    out.push({ t: k, n }); i += k.length;
   }
-  return html + esc(plate.slice(i));
+  if (i < plate.length) out.push({ t: plate.slice(i), n: -1 });
+  return out;
 }
-function answerPiecesHTML(answer, parts) {
+function answerSegments(answer, parts) {
   answer = String(answer || '');
-  if (!parts) return esc(answer);
-  const col = pieceColor(parts), lower = answer.toLowerCase(); let pos = 0, html = '';
+  if (!parts) return [{ t: answer, n: -1 }];
+  const lower = answer.toLowerCase(), out = []; let pos = 0;
   parts.forEach(([, v], n) => {
     const word = new RegExp('(?<![\\p{L}\\p{N}])' + v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\p{L}\\p{N}])', 'iug');
     word.lastIndex = pos;
     const m = word.exec(answer);
     const at = m ? m.index : lower.indexOf(v.toLowerCase(), pos);
     if (at < 0) return;
-    html += esc(answer.slice(pos, at)) + `<span class="pc c${col[n]}">${esc(answer.slice(at, at + v.length))}</span>`;
-    pos = at + v.length;
+    if (at > pos) out.push({ t: answer.slice(pos, at), n: -1 });
+    out.push({ t: answer.slice(at, at + v.length), n }); pos = at + v.length;
   });
-  return html + esc(answer.slice(pos));
+  if (pos < answer.length) out.push({ t: answer.slice(pos), n: -1 });
+  return out;
+}
+// the pieces a plate reveals in (just one, the whole answer, if it has no usable mapping)
+function piecesOf(p) {
+  if (!p) return [];
+  const ok = p.parts && plateSegments(p.plate, p.parts);
+  return ok ? p.parts.map(([k, v], n) => ({ plate: k, means: v, color: pieceColor(p.parts)[n] })) : [{ plate: p.plate, means: p.answer, color: -1 }];
+}
+const pieceTotal = p => piecesOf(p).length;
+// step = how many pieces are showing (undefined = all of them)
+function platePiecesHTML(plate, parts, step = Infinity) {
+  const seg = plateSegments(plate, parts); if (!seg) return null;
+  const col = pieceColor(parts);
+  return seg.map(x => x.n >= 0 && x.n < step ? `<span class="pc c${col[x.n]}${x.n === step - 1 ? ' now' : ''}">${esc(x.t)}</span>` : esc(x.t)).join('');
+}
+function answerPiecesHTML(p, step = Infinity) {   // p = the puzzle
+  const usable = p.parts && plateSegments(p.plate, p.parts) ? p.parts : null, answer = p.answer;
+  const col = usable ? pieceColor(usable) : [], total = usable ? usable.length : 1;
+  const hide = t => t.split(/(\s+)/).map(w => !w || /^\s+$/.test(w) ? w : `<span class="pc hid">${esc(w)}</span>`).join('');
+  return answerSegments(answer, usable).map(x => {
+    if (x.n < 0) return step >= total ? esc(x.t) : hide(x.t);
+    return x.n < step ? `<span class="pc c${col[x.n]}">${esc(x.t)}</span>` : hide(x.t);
+  }).join('');
 }
 function fitPlate(plate) {
   const span = plate.querySelector('.plate-text span');
