@@ -279,14 +279,32 @@ function ppSpeedLeft(s) { return s.speed && s.speed.endsAt ? Math.max(0, (s.spee
 const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const teamName = (s, id) => (s.teams.find(t => t.id === id) || {}).name || '';
 
+const BADGES = { raptor: 'raptor.png' };   // pictures a plate's frame can carry ("| badge: raptor")
 function plateHTML(text, opts = {}) {
-  return `<div class="plate ${opts.cls || ''}">
+  // the state name is coloured once its piece ("~=…") has been revealed
+  let top = esc(opts.top || 'Puzzle State');
+  if (opts.parts) {
+    const n = opts.parts.findIndex(([k]) => k === '~'), step = opts.step == null ? Infinity : opts.step;
+    if (n >= 0 && n < step) top = `<span class="pc c${pieceColor(opts.parts)[n]}">${top}</span>`;
+    else if (n >= 0) top = `<span class="st-wait">${top}</span>`;   // not its turn yet: plain ink, not the red of piece 1
+  }
+  const plate = `<div class="plate ${opts.cls || ''}">
     <i class="slot l"></i><i class="slot r"></i>
     <span class="sticker l">11</span><span class="sticker r">27</span>
-    <div class="plate-top">${opts.top || 'Puzzle State'}</div>
+    <div class="plate-top">${top}</div>
     <div class="plate-text"><span>${(opts.parts && platePiecesHTML(text, opts.parts, opts.step)) || esc(text) || '&nbsp;'}</span></div>
     <div class="plate-bottom">${opts.bottom || 'LAND OF VANITY PLATES'}</div>
   </div>`;
+  if (opts.frame == null && !opts.badge) return plate;
+  const top2 = opts.badge && BADGES[opts.badge] ? `<img src="${BADGES[opts.badge]}" alt="${esc(opts.badge)}">` : esc(opts.frame || opts.badge || '');
+  return `<div class="pframe"><div class="pf-top">${top2}</div>${plate}<div class="pf-bot">PLATE PURSUIT MOTORS</div></div>`;
+}
+// a puzzle's plate with its state and frame; the frame and state stay blank while the plate is covered
+function puzzlePlate(p, opts = {}) {
+  if (!p) return plateHTML('', opts);
+  const covered = /covered/.test(opts.cls || '');
+  return plateHTML(opts.text != null ? opts.text : p.plate, { ...opts, top: covered ? 'Puzzle State' : p.state,
+    frame: covered ? '' : (p.frame || ''), badge: covered ? null : p.badge });
 }
 
 // Stretch the characters across the plate. Letters are sized to the plate's height
@@ -302,8 +320,9 @@ function plateSegments(plate, parts) {
   if (!parts) return null;
   plate = String(plate || ''); let i = 0; const out = [];
   for (let n = 0; n < parts.length; n++) {
-    while (plate[i] === ' ') { out.push({ t: ' ', n: -1 }); i++; }
     const k = parts[n][0];
+    if (k === '~') continue;   // the state name, not on the plate itself
+    while (plate[i] === ' ') { out.push({ t: ' ', n: -1 }); i++; }
     if (plate.slice(i, i + k.length) !== k) return null;
     out.push({ t: k, n }); i += k.length;
   }
@@ -330,7 +349,7 @@ function answerSegments(answer, parts) {
 function piecesOf(p) {
   if (!p) return [];
   const ok = p.parts && plateSegments(p.plate, p.parts);
-  return ok ? p.parts.map(([k, v], n) => ({ plate: k, means: v, color: pieceColor(p.parts)[n] })) : [{ plate: p.plate, means: p.answer, color: -1 }];
+  return ok ? p.parts.map(([k, v], n) => ({ plate: k === '~' ? (p.state || 'the state') : k, means: v, color: pieceColor(p.parts)[n], state: k === '~' })) : [{ plate: p.plate, means: p.answer, color: -1 }];
 }
 const pieceTotal = p => piecesOf(p).length;
 // step = how many pieces are showing (undefined = all of them)

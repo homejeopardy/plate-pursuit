@@ -9,7 +9,7 @@ const { createEngine } = require('./engine.js');
 const PORT = Number(process.env.PORT) || 3400;
 const DIR = __dirname;
 const SAVE = path.join(DIR, 'saved-game.json');
-const PUBLIC = new Set(['index.html', 'host.html', 'display.html', 'play.html', 'stage.html', 'pointer.html', 'shared.js', 'engine.js', 'style.css']);
+const PUBLIC = new Set(['index.html', 'host.html', 'display.html', 'play.html', 'stage.html', 'pointer.html', 'raptor.png', 'shared.js', 'engine.js', 'style.css']);
 
 const clients = new Set();
 const engine = createEngine({
@@ -44,7 +44,7 @@ function body(req) {
   });
 }
 const json = (res, obj, code = 200) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(obj)); };
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png' };
 
 http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');

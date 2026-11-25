@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Host</title>
-<link rel="stylesheet" href="style.css?v=18">
+<link rel="stylesheet" href="style.css?v=19">
 </head>
 <body class="host-page">
 <div class="host">
@@ -87,10 +87,10 @@
   </div>
 </div>
 
-<script src="mode.js?v=18"></script>
+<script src="mode.js?v=19"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="engine.js?v=18"></script>
-<script src="shared.js?v=18"></script>
+<script src="engine.js?v=19"></script>
+<script src="shared.js?v=19"></script>
 <script>
 const $ = id => document.getElementById(id);
 const act = PP.act;
@@ -198,7 +198,7 @@ function render(s) {
     fwager: 'Final plate: teams are betting', fanswer: 'Final plate: teams are typing answers', fjudge: 'Final plate: mark each answer' };
   $('nowTitle').textContent = 'Now: ' + (phaseNames[s.phase] || s.phase);
   const showPlate = p && !['lobby', 'final', 'speedready'].includes(s.phase);
-  $('hPlate').innerHTML = plateHTML(showPlate ? p.plate : '', { cls: s.phase === 'ready' ? 'covered' : '' });
+  $('hPlate').innerHTML = showPlate ? puzzlePlate(p, { parts: ['revealed', 'fjudge'].includes(s.phase) && p.parts, step: s.step }) : plateHTML('');
   $('hAnswer').textContent = showPlate ? p.answer : '';
   if (showPlate && ['revealed', 'fjudge'].includes(s.phase) && pieceTotal(p) > 1)
     $('hAnswer').insertAdjacentHTML('beforeend', `<div class="note">On screen: ${Math.min(s.step, pieceTotal(p))} of ${pieceTotal(p)} pieces</div>`);

@@ -372,3 +372,18 @@ body.crew-page { background: var(--asphalt); color: #fff; min-height: 100vh; }
 .pt-means { font: 900 46px/1.1 var(--font); margin-top: 4px; color: var(--yellow); }
 .pt-msg { font: 800 30px/1.2 var(--font); }
 .pt-note { font: 600 17px/1.35 var(--font); color: #bdb8ab; margin-top: 12px; }
+
+/* ---------- licence plate frame (chrome, with a line of text or a badge on top) ---------- */
+.pframe { container-type: inline-size; padding: 0 2.4cqw; border-radius: 3.4cqw;
+  background: linear-gradient(180deg, #f1f3f5 0%, #b9bec5 38%, #e3e6ea 52%, #9da3ab 100%);
+  box-shadow: inset 0 0 0 .35cqw #6f757d, inset 0 .6cqw .4cqw rgba(255,255,255,.7), 0 1.6cqw 3.2cqw rgba(0,0,0,.45); }
+.pframe .plate { box-shadow: 0 0 0 .3cqw #5d636b; }
+.pf-top, .pf-bot { display: grid; place-items: center; color: #1d2126; text-transform: uppercase; white-space: nowrap; overflow: hidden;
+  text-shadow: 0 .15cqw 0 rgba(255,255,255,.75); }
+.pf-top { height: 7.6cqw; font: 900 3.9cqw/1 var(--font); letter-spacing: .06em; }
+.pf-bot { height: 5cqw; font: 800 2.3cqw/1 var(--font); letter-spacing: .24em; color: #444a52; }
+.pf-top:has(img) { height: 13cqw; }
+.pf-top img { height: 11cqw; width: auto; max-width: 92%; display: block; filter: drop-shadow(0 .3cqw .2cqw rgba(0,0,0,.35)); }
+.d-plate:has(.pframe) { width: min(56vw, 86vh); }
+.plate-top .pc { color: var(--pc); }
+.plate-top .st-wait { color: var(--plate-ink); }

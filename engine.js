@@ -5,51 +5,62 @@ function createEngine(opts = {}) {
   const changed = () => { S.undoLabel = history.length ? history[history.length - 1].label : null; opts.persist && opts.persist(S); opts.onChange && opts.onChange(); };
   const history = [];   // undo stack (in memory only)
   const DEFAULT_PUZZLES = `## What does it say?
-  XQZME | Excuse me | X=Ex, QZ=cuse, ME=me
-  EZ4U2C | Easy for you to see | EZ=Easy, 4=for, U=you, 2=to, C=see
-  NOT2NITE | Not tonight | NOT=Not, 2=to, NITE=night
-  IH8MNDAZ | I hate Mondays | I=I, H8=hate, MNDAZ=Mondays
-  RUOK2DRV | Are you okay to drive? | R=Are, U=you, OK=okay, 2=to, DRV=drive
-  XLNC | Excellence | X=Ex, L=cel, N=len, C=ce
-  NRG4U | Energy for you | NRG=Energy, 4=for, U=you
-  LUV2SK8 | Love to skate | LUV=Love, 2=to, SK8=skate
-  GONE4GD | Gone for good | GONE=Gone, 4=for, GD=good
-  IOU1MOR | I owe you one more | I=I, O=owe, U=you, 1=one, MOR=more
-  QTP2T | Cutie patootie | QT=Cutie, P=pa, 2=too, T=tie
-  XPRT | Expert | X=Ex, P=p, RT=ert
-  1DRWMN | Wonder Woman | 1=Won, DR=der, WMN=Woman
-  YRUL8 | Why are you late? | Y=Why, R=are, U=you, L8=late
-  2L8 4ME | Too late for me | 2=Too, L8=late, 4=for, ME=me
-  RTST | Artist | RT=Art, ST=ist
-  NSANE | Insane | N=In, SANE=sane
-  2THDK | Tooth decay | 2TH=Tooth, DK=decay
-  ICUR2BZ | I see you're too busy | I=I, C=see, UR=you're, 2=too, BZ=busy
-  LTL OL ME | Little old me | LTL=Little, OL=old, ME=me
-  CR8TIV | Creative | CR8=Crea, TIV=tive
-  4EVR YNG | Forever young | 4=For, EVR=ever, YNG=young
-  B9 | Benign | B=Be, 9=nign
-  N8IV | Native | N8=Nat, IV=ive
-  U4IA | Euphoria | U=Eu, 4=pho, IA=ria
-  NML | Animal | N=An, M=im, L=al
-  OBDNT | Obedient | O=O, B=be, D=di, NT=ent
-  DSPR8 | Desperate | DSP=Desp, R=er, 8=ate
-  1DRLND | Wonderland | 1=Won, DR=der, LND=land
-  AT10SHN | Attention | AT=At, 10=ten, SHN=tion
-  4GV ME | Forgive me | 4=For, GV=give, ME=me
-  0 2 60 | Zero to sixty | 0=Zero, 2=to, 60=sixty
-  NE1 4 10S | Anyone for tennis? | NE1=Anyone, 4=for, 10=ten, S=nis
-  BYND | Beyond | B=Be, YND=yond
-  NFO | Info | N=In, FO=fo
-  MT NST | Empty nest | MT=Empty, NST=nest
-  IM2GUD4U | I'm too good for you | IM=I'm, 2=too, GUD=good, 4=for, U=you
-  DCSN | Decision | D=De, C=ci, SN=sion
-  10DR | Tender | 10=Ten, DR=der
-  SEZ U | Says you | SEZ=Says, U=you
-  IYDKNYK | If you don't know, now you know | I=If, Y=you, D=don't, K=know, N=now, Y=you, K=know
-  GUDAY M8 | G'day, mate | GUDAY=G'day, M8=mate
-  SOULM8S | Soulmates | SOUL=Soul, M8=mate, S=s
-  SRVSTEK | Serve steak | SRV=Serve, STEK=steak
-  GRLDCHS | Grilled cheese | GRLD=Grilled, CHS=cheese`;
+  XQZME | Excuse me | X=Ex, QZ=cuse, ME=me | frame: SORRY, NEW DRIVER
+  EZ4U2C | Easy for you to see | EZ=Easy, 4=for, U=you, 2=to, C=see | frame: IF YOU CAN READ THIS
+  NOT2NITE | Not tonight | NOT=Not, 2=to, NITE=night | frame: HOME BY 9
+  IH8MNDAZ | I hate Mondays | I=I, H8=hate, MNDAZ=Mondays | frame: THANK GOODNESS IT'S FRIDAY
+  RUOK2DRV | Are you okay to drive? | R=Are, U=you, OK=okay, 2=to, DRV=drive | frame: DESIGNATED DRIVER
+  XLNC | Excellence | X=Ex, L=cel, N=len, C=ce | frame: HONOR ROLL STUDENT
+  NRG4U | Energy for you | NRG=Energy, 4=for, U=you | frame: POWERED BY COFFEE
+  LUV2SK8 | Love to skate | LUV=Love, 2=to, SK8=skate | frame: I'D RATHER BE AT THE SKATE PARK
+  GONE4GD | Gone for good | GONE=Gone, 4=for, GD=good | frame: MOVING SALE
+  IOU1MOR | I owe you one more | I=I, O=owe, U=you, 1=one, MOR=more | frame: PAID IN FULL… ALMOST
+  QTP2T | Cutie patootie | QT=Cutie, P=pa, 2=too, T=tie | frame: GRANDMA'S CAR
+  XPRT | Expert | X=Ex, P=p, RT=ert | frame: ASK ME ANYTHING
+  1DRWMN | Wonder Woman | 1=Won, DR=der, WMN=Woman | frame: SUPERHERO ON BOARD
+  YRUL8 | Why are you late? | Y=Why, R=are, U=you, L8=late | frame: SCHOOL ZONE
+  2L8 4ME | Too late for me | 2=Too, L8=late, 4=for, ME=me | frame: MISSED THE BUS
+  RTST | Artist | RT=Art, ST=ist | frame: HONK IF YOU LIKE PAINTINGS
+  NSANE | Insane | N=In, SANE=sane | frame: 0 TO 60 IN 3 SECONDS
+  2THDK | Tooth decay | 2TH=Tooth, DK=decay | frame: MY DENTIST DRIVES A NICER CAR
+  ICUR2BZ | I see you're too busy | I=I, C=see, UR=you're, 2=too, BZ=busy | frame: TEXT ME LATER
+  LTL OL ME | Little old me | LTL=Little, OL=old, ME=me | frame: WORLD'S OKAYEST DRIVER
+  CR8TIV | Creative | CR8=Crea, TIV=tive | frame: ART TEACHER ON BOARD
+  4EVR YNG | Forever young | 4=For, EVR=ever, YNG=young | frame: SENIOR CITIZEN
+  B9 | Benign | B=Be, 9=nign | frame: NOTHING TO WORRY ABOUT
+  N8IV | Native | N8=Nat, IV=ive | frame: BORN AND RAISED
+  U4IA | Euphoria | U=Eu, 4=pho, IA=ria | frame: JUST GOT MY LICENSE
+  NML | Animal | N=An, M=im, L=al | frame: I BRAKE FOR SQUIRRELS
+  OBDNT | Obedient | O=O, B=be, D=di, NT=ent | frame: DOG TRAINING SCHOOL
+  DSPR8 | Desperate | DSP=Desp, R=er, 8=ate | frame: LOW ON GAS
+  1DRLND | Wonderland | 1=Won, DR=der, LND=land | frame: FOLLOW THE WHITE RABBIT
+  AT10SHN | Attention | AT=At, 10=ten, SHN=tion | frame: BUCKLE UP
+  4GV ME | Forgive me | 4=For, GV=give, ME=me | frame: I DIDN'T SEE THE STOP SIGN
+  0 2 60 | Zero to sixty | 0=Zero, 2=to, 60=sixty | frame: RACE CAR DRIVER
+  NE1 4 10S | Anyone for tennis? | NE1=Anyone, 4=for, 10=ten, S=nis | frame: COUNTRY CLUB MEMBER
+  BYND | Beyond | B=Be, YND=yond | frame: TO INFINITY
+  NFO | Info | N=In, FO=fo | frame: LIBRARY VOLUNTEER
+  MT NST | Empty nest | MT=Empty, NST=nest | frame: KIDS AWAY AT COLLEGE
+  IM2GUD4U | I'm too good for you | IM=I'm, 2=too, GUD=good, 4=for, U=you | frame: NEVER LOST A GAME
+  DCSN | Decision | D=De, C=ci, SN=sion | frame: SHOULD I TURN LEFT?
+  10DR | Tender | 10=Ten, DR=der | frame: STEAKHOUSE CHEF
+  SEZ U | Says you | SEZ=Says, U=you | frame: MOM KNOWS BEST
+  IYDKNYK | If you don't know, now you know | I=If, Y=you, D=don't, K=know, N=now, Y=you, K=know | frame: INSIDE JOKE
+  GUDAY M8 | G'day, mate | GUDAY=G'day, M8=mate | frame: AUSTRALIAN AT HEART
+  SOULM8S | Soulmates | SOUL=Soul, M8=mate, S=s | frame: JUST MARRIED
+  SRVSTEK | Serve steak | SRV=Serve, STEK=steak | frame: GRILL MASTER
+  GRLDCHS | Grilled cheese | GRLD=Grilled, CHS=cheese | frame: SOUP OF THE DAY: TOMATO
+  EW PRNDL | Ew Prindle | EW=Ew, PRNDL=Prindle | frame: STUDENT DRIVER
+  XT1NK | Extinct | X=Ex, T=t, 1=i, NK=nct | badge: raptor
+  SNDAE DRVR | Sundae driver | SNDAE=Sundae, DRVR=driver | frame: ICE CREAM TRUCK
+  UR NXT | You're next | UR=You're, NXT=next | frame: TOW TRUCK
+  TRSH TLK | Trash talk | TRSH=Trash, TLK=talk | frame: GARBAGE TRUCK
+  YA | How are ya? | ~=How are, YA=ya | state: Hawaii | frame: ALOHA!
+  LUVS CO | Misery loves company | ~=Misery, LUVS=loves, CO=company | state: Missouri | frame: CARPOOL LANE
+  FAVR | I owe a favor | ~=I owe a, FAVR=favor | state: Iowa | frame: BORROWED CAR
+  EVENT | Main event | ~=Main, EVENT=event | state: Maine | frame: HEADLINER
+  JONES | Indiana Jones | ~=Indiana, JONES=Jones | state: Indiana | frame: ARCHAEOLOGIST
+  CURIUS | Curious George | CURIUS=Curious, ~=George | state: Georgia | frame: THE MAN IN THE YELLOW HAT`;
   
   // "PLATE | answer | x2" marks a double-points plate
   const isDouble = f => /^(x2|2x|double)$/i.test(String(f).trim());
@@ -92,6 +103,13 @@ function createEngine(opts = {}) {
   H8 TRAFC | I hate traffic | H8=hate, TRAFC=traffic
   XCELLNT | Excellent | X=Ex, CELL=cell, NT=ent
   2MUCH2DO | Too much to do | 2=Too, MUCH=much, 2=to, DO=do`;
+  // 50 states, DC and the 5 territories: 56 different plates before a state repeats
+  const STATES = ['Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'Florida', 'Georgia',
+    'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan',
+    'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey', 'New Mexico', 'New York',
+    'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota',
+    'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming',
+    'District of Columbia', 'Puerto Rico', 'Guam', 'U.S. Virgin Islands', 'American Samoa', 'Northern Mariana Islands'];
   function parsePuzzles(text) {
     let cat = 'What does it say?';
     const out = [];
@@ -103,9 +121,19 @@ function createEngine(opts = {}) {
       const [plate, answer = '', ...extra] = l.split('|').map(s => s.trim());
       if (!plate) continue;
       const q = { cat, plate: plate.toUpperCase().slice(0, 10), answer };
-      for (const f of extra) { if (isDouble(f)) q.double = true; else if (/^hint\s*:/i.test(f)) q.hint = f.replace(/^hint\s*:\s*/i, ''); else if (f.includes('=')) q.parts = parseParts(f); }
+      for (const f of extra) {
+        const kv = f.match(/^(hint|state|frame|badge)\s*:\s*(.*)$/i);
+        if (isDouble(f)) q.double = true;
+        else if (kv) q[kv[1].toLowerCase()] = kv[2].trim();
+        else if (f.includes('=')) q.parts = parseParts(f);
+      }
       out.push(q);
     }
+    // every plate gets its own state: the ones named in the list first, then the rest in order
+    const taken = new Set(out.map(q => q.state).filter(Boolean));
+    const free = STATES.filter(x => !taken.has(x));
+    let k = 0;
+    for (const q of out) if (!q.state) q.state = free.length ? free[k++ % free.length] : STATES[k++ % STATES.length];
     return out;
   }
   
@@ -210,6 +238,31 @@ function createEngine(opts = {}) {
     S.used = usedPlates.map(idx).filter(i => i >= 0);
     S.cur = curPlate != null && idx(curPlate) >= 0 ? idx(curPlate) : null;
     setTimeout(() => opts.persist && opts.persist(S), 0);
+  }
+  // 2026-11-25: frames on every plate, state jokes and car jokes. Starter lines in a saved list are brought up to
+  // date (keeping a "| x2"), missing starter plates are added after the last plate, and played plates stay played.
+  if (/^\s*XQZME\s*\|/m.test(S.puzzleText || '')) {
+    const def = {};
+    for (const l of DEFAULT_PUZZLES.split('\n')) { const t = l.trim(); if (t && !t.startsWith('#') && t.includes('|')) def[t.split('|')[0].trim()] = t; }
+    const seen = new Set(); let touched = false, lastPlate = -1;
+    const lines = String(S.puzzleText).split('\n').map((raw, i) => {
+      const t = raw.trim(); if (!t || t.startsWith('#')) return raw;
+      const pl = t.split('|')[0].trim().toUpperCase(); seen.add(pl); lastPlate = i;
+      if (!def[pl] || /\|\s*(frame|badge)\s*:/i.test(t)) return raw;
+      touched = true;
+      return raw.match(/^\s*/)[0] + def[pl] + (t.split('|').slice(2).some(f => isDouble(f)) ? ' | x2' : '');
+    });
+    const missing = Object.keys(def).filter(pl => !seen.has(pl)).map(pl => '  ' + def[pl]);
+    if (missing.length) { lines.splice(lastPlate + 1, 0, ...missing); touched = true; }
+    if (touched) {
+      const plateAt = i => (S.puzzles[i] || {}).plate;
+      const usedPlates = S.used.map(plateAt), curPlate = plateAt(S.cur);
+      S.puzzleText = lines.join('\n'); S.puzzles = parsePuzzles(S.puzzleText);
+      const idx = pl => S.puzzles.findIndex(q => q.plate === pl);
+      S.used = usedPlates.map(idx).filter(i => i >= 0);
+      S.cur = curPlate != null && idx(curPlate) >= 0 ? idx(curPlate) : null;
+      setTimeout(() => opts.persist && opts.persist(S), 0);
+    }
   }
   // Saved lists from before plate pieces were coloured: add the starter mapping to starter lines that have none.
   {
@@ -460,7 +513,7 @@ function createEngine(opts = {}) {
     if (!q) return 0;
     if (!q.parts) return 1;
     let i = 0;
-    for (const [k] of q.parts) { while (q.plate[i] === ' ') i++; if (q.plate.slice(i, i + k.length) !== k) return 1; i += k.length; }
+    for (const [k] of q.parts) { if (k === '~') continue; while (q.plate[i] === ' ') i++; if (q.plate.slice(i, i + k.length) !== k) return 1; i += k.length; }
     return q.parts.length;
   }
   function freeColor() {

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#262626">
 <title>Plate Pursuit · Host script</title>
-<link rel="stylesheet" href="style.css?v=18">
+<link rel="stylesheet" href="style.css?v=19">
 </head>
 <body class="crew-page">
 <div class="crew-wrap" id="app">
@@ -18,9 +18,9 @@
   <div class="cr-scores" id="scores"></div>
   <div class="cr-conn" id="conn"></div>
 </div>
-<script src="mode.js?v=18"></script>
+<script src="mode.js?v=19"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="shared.js?v=18"></script>
+<script src="shared.js?v=19"></script>
 <script>
 const $ = id => document.getElementById(id);
 if (PP.needRoom('HOST SCRIPT')) throw new Error('waiting for room code');
@@ -97,7 +97,7 @@ function render(s) {
     lastKey = key;
     $('say').innerHTML = script(s).map(l => `<p>${l}</p>`).join('');
     const showPlate = p && !['lobby', 'final', 'speedready'].includes(s.phase);
-    $('plate').innerHTML = showPlate ? plateHTML(p.plate, { parts: p.parts }) : '';
+    $('plate').innerHTML = showPlate ? puzzlePlate(p, { parts: p.parts }) : '';
     $('ans').innerHTML = showPlate ? `<b>${esc(p.answer)}</b>${p.hint ? `<div class="cr-hint">Clue: ${esc(p.hint)}</div>` : ''}` : '';
     const revealing = ['revealed', 'fjudge'].includes(s.phase);
     $('pieces').innerHTML = showPlate && pcs.length > 1 ? pcs.map((pc, i) => `<li class="${revealing && i < s.step ? 'done' : ''} ${revealing && i === s.step ? 'next' : ''}">

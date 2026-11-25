@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Projector</title>
-<link rel="stylesheet" href="style.css?v=18">
+<link rel="stylesheet" href="style.css?v=19">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body class="display-page">
@@ -16,9 +16,9 @@
 <div class="unlock" id="unlock"><div class="sign green">Click to start the projector<small>Turns on sound and goes full screen</small></div></div>
 <div class="conn" id="conn"></div>
 
-<script src="mode.js?v=18"></script>
+<script src="mode.js?v=19"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="shared.js?v=18"></script>
+<script src="shared.js?v=19"></script>
 <script>
 const $ = id => document.getElementById(id);
 let lastEv = null, lastKey = '', lastPlateKey = '';
@@ -70,20 +70,20 @@ function renderStage(s) {
       : s.phase === 'fanswer' ? `<div class="limit answer" id="answerSign"><div class="t">ANSWER</div><div class="n" id="answerNum"></div></div><div class="d-hint">Type your answer on your phone</div>`
       : `<div>${finalSpot(s)}<div class="d-answer">${s.fin && s.fin.shown < s.fin.order.length ? '' : answerPiecesHTML(p, s.step)}</div></div>`;
     html = `<div class="d-q"><div class="count">Final plate</div><div class="q">${esc(p.cat || '')}</div></div>
-      <div class="d-plate ${s.phase === 'fanswer' && enter !== '' ? 'enter' : ''}">${plateHTML(showing ? p.plate : 'BET NOW', { cls: showing ? '' : 'covered', parts: s.phase === 'fjudge' && p.parts, step: s.step })}</div>
+      <div class="d-plate ${s.phase === 'fanswer' && enter !== '' ? 'enter' : ''}">${puzzlePlate(p, { text: showing ? p.plate : 'BET NOW', cls: showing ? '' : 'covered', parts: s.phase === 'fjudge' && p.parts, step: s.step })}</div>
       <div class="d-under">${under}</div>`;
     st.innerHTML = html; tick(); return;
   }
   if (s.phase === 'speedready') {
     html = `<div class="d-q"><div class="count">${Math.round(s.settings.speedSeconds)}-second speed round</div><div class="q">${esc(teamName(s, s.speed.teamId))}, get ready</div></div>
-      <div class="d-plate">${plateHTML('READY', { cls: 'covered' })}</div>
+      <div class="d-plate">${plateHTML('READY', { cls: 'covered', frame: '' })}</div>
       <div class="d-under"><div class="sign white d-clock" id="clock">${Math.ceil(s.settings.speedSeconds)}</div></div>`;
     st.innerHTML = html; return;
   }
   if (s.phase === 'speed' || s.phase === 'speedover') {
     const over = s.phase === 'speedover';
     html = `<div class="d-q"><div class="count">Speed round: ${esc(teamName(s, s.speed.teamId))}</div><div class="q">${over ? 'Time' : esc(p.cat || '')}</div></div>
-      <div class="d-plate ${over ? '' : enter}">${plateHTML(over ? 'TIME' : p.plate, { cls: over ? 'covered' : '' })}</div>
+      <div class="d-plate ${over ? '' : enter}">${puzzlePlate(p, { text: over ? 'TIME' : p.plate, cls: over ? 'covered' : '' })}</div>
       <div class="d-under"><div class="sign white d-clock" id="clock"></div><div class="d-speed-count"><b>${s.speed.count}</b> solved</div></div>`;
     st.innerHTML = html; tick(); return;
   }
@@ -98,7 +98,7 @@ function renderStage(s) {
   const dbl = p_double(s);
   const countLine = s.tb ? 'Tie-breaker: ' + s.tb.teams.map(id => esc(teamName(s, id))).join(' vs ') : `Plate ${s.used.length + (showAnswer ? 0 : 1)} of ${s.puzzles.length}`;
   html = `<div class="d-q"><div class="count">${countLine}${dbl ? ' <span class="d-double">Double points</span>' : ''}</div><div class="q">${esc(p.cat || '')}</div>${p.hint ? `<div class="d-hint-line">${esc(p.hint)}</div>` : ''}</div>
-    <div class="d-plate ${enter}">${plateHTML(covered ? (dbl ? 'DOUBLE' : '?') : p.plate, { cls: covered ? 'covered' + (dbl ? ' double' : '') : '', parts: showAnswer && p.parts, step: s.step })}</div>
+    <div class="d-plate ${enter}">${puzzlePlate(p, { text: covered ? (dbl ? 'DOUBLE' : '?') : p.plate, cls: covered ? 'covered' + (dbl ? ' double' : '') : '', parts: showAnswer && p.parts, step: s.step })}</div>
     <div class="d-under">${under}</div>`;
   st.innerHTML = html; tick();
 }

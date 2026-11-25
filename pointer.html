@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <meta name="theme-color" content="#262626">
 <title>Plate Pursuit · Pointer</title>
-<link rel="stylesheet" href="style.css?v=18">
+<link rel="stylesheet" href="style.css?v=19">
 </head>
 <body class="crew-page">
 <div class="pt-wrap" id="app">
@@ -15,9 +15,9 @@
   <ol class="cr-pieces pt-list" id="pieces"></ol>
   <div class="cr-conn" id="conn"></div>
 </div>
-<script src="mode.js?v=18"></script>
+<script src="mode.js?v=19"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="shared.js?v=18"></script>
+<script src="shared.js?v=19"></script>
 <script>
 const $ = id => document.getElementById(id);
 if (PP.needRoom('POINTER')) throw new Error('waiting for room code');
@@ -59,7 +59,7 @@ function render(s) {
   const p = s.puzzles[s.cur] || null, pcs = piecesOf(p);
   const revealing = ['revealed', 'fjudge'].includes(s.phase) && !(s.phase === 'fjudge' && s.fin && s.fin.shown < s.fin.order.length);
   const showPlate = p && !['lobby', 'final', 'speedready', 'fwager'].includes(s.phase);
-  $('plate').innerHTML = showPlate ? plateHTML(p.plate, { parts: p.parts, step: revealing ? s.step : 0 }) : '';
+  $('plate').innerHTML = showPlate ? puzzlePlate(p, { parts: p.parts, step: revealing ? s.step : 0 }) : '';
   $('card').innerHTML = card(s);
   $('pieces').innerHTML = showPlate && pcs.length > 1 && !s.phase.startsWith('speed') ? pcs.map((pc, i) => `<li class="${revealing && i < s.step ? 'done' : ''} ${(revealing ? s.step : 0) === i ? 'next' : ''}">
     <span class="pc c${pc.color}">${esc(pc.plate)}</span> = <span class="pc c${pc.color}">${esc(pc.means)}</span></li>`).join('') : '';
