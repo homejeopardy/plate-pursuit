@@ -145,9 +145,12 @@ function createEngine(opts = {}) {
   const COLORS = ['red', 'blue', 'orange', 'purple', 'teal', 'pink', 'green', 'brown'];
   const DEFAULT_SETTINGS = { maxPoints: 100, minPoints: 10, drainSeconds: 20, answerSeconds: 5, speedPoints: 50, speedSeconds: 60, finalSeconds: 30 };
   
+  // The four teams every new game starts with (the user's class teams); the host can still add, rename or remove.
+  const DEFAULT_TEAMS = [['CNSTTTNLWYR', 'red'], ['SCNCEGY', 'blue'], ['GEHLTHCR', 'orange'], ['PJMKRNDMR', 'purple']];
+  function defaultTeams(firstId) { return DEFAULT_TEAMS.map(([name, color], i) => ({ id: firstId + i, name, score: 0, color })); }
   function freshState() {
     return {
-      phase: 'lobby', teams: [], nextTeamId: 1,
+      phase: 'lobby', teams: defaultTeams(1), nextTeamId: 1 + DEFAULT_TEAMS.length,
       puzzleText: DEFAULT_PUZZLES, puzzles: parsePuzzles(DEFAULT_PUZZLES),
       used: [], cur: null, elapsed: 0, runningSince: null,
       buzzed: null, locked: [], valueAtBuzz: 0, result: null,
@@ -347,7 +350,7 @@ function createEngine(opts = {}) {
   const UNDO_LABELS = { next: 'Next plate', load: 'Pick plate', start: 'Start clock', buzz: 'Buzz-in', correct: 'Correct', wrong: 'Wrong',
     timeout: 'Time ran out', reopen: 'Reopen buzzing', reveal: 'Reveal', pass: 'Pass', speedReady: 'Set up speed round',
     speedStart: 'Start speed round', speedStop: 'Stop speed round', final: 'Final standings', lobby: 'Join screen',
-    score: 'Score change', toggleDouble: 'Double points', removeTeam: 'Remove team', finalStart: 'Final wager plate', finalShow: 'Show final plate',
+    score: 'Score change', defaultTeams: 'Default teams', toggleDouble: 'Double points', removeTeam: 'Remove team', finalStart: 'Final wager plate', finalShow: 'Show final plate',
     finalLock: 'Lock answers', finalMark: 'Mark final answer', tiebreak: 'Tie-breaker plate',
     step: 'Reveal piece', stepAll: 'Whole answer', finalNext: 'Show team answer' };
   function record(type) {
@@ -493,6 +496,7 @@ function createEngine(opts = {}) {
     score({ teamId, delta }) { const t = team(Number(teamId)); if (t) t.score += Number(delta) || 0; },
     rename({ teamId, name }) { const t = team(Number(teamId)); if (t && String(name).trim()) t.name = String(name).trim().slice(0, 24); },
     addTeam({ name }) { addTeam(name); },
+    defaultTeams() { S.teams = defaultTeams(S.nextTeamId); S.nextTeamId += DEFAULT_TEAMS.length; },
     color({ teamId, color }) { const t = team(Number(teamId)); if (t && COLORS.includes(color)) t.color = color; },
     toggleDouble({ index }) {
       const i = Number(index), q = S.puzzles[i]; if (!q) return;
@@ -516,7 +520,8 @@ function createEngine(opts = {}) {
     },
     newGame({ keepTeams } = {}) {
       clearTimeout(speedTimer); clearTimeout(finTimer); history.length = 0;
-      const keep = { teams: keepTeams ? S.teams.map(t => ({ ...t, score: 0 })) : [], nextTeamId: S.nextTeamId,
+      // not keeping teams = back to the four default teams (new ids, so phones pick their team again)
+      const keep = { teams: keepTeams ? S.teams.map(t => ({ ...t, score: 0 })) : defaultTeams(S.nextTeamId), nextTeamId: keepTeams ? S.nextTeamId : S.nextTeamId + DEFAULT_TEAMS.length,
         puzzleText: S.puzzleText, puzzles: S.puzzles, settings: S.settings, ev: S.ev, shuffle: S.shuffle };
       S = { ...freshState(), ...keep };
     },

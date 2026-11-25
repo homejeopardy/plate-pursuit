@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Host</title>
-<link rel="stylesheet" href="style.css?v=27">
+<link rel="stylesheet" href="style.css?v=28">
 </head>
 <body class="host-page">
 <div class="host">
@@ -33,6 +33,7 @@
     <div class="row" style="margin-top:10px">
       <input id="newTeam" class="text-in" placeholder="Add a team without a phone" style="flex:1">
       <button class="btn" id="addTeam">Add</button>
+      <button class="btn" id="defaultTeams" title="CNSTTTNLWYR, SCNCEGY, GEHLTHCR, PJMKRNDMR">Default teams</button>
     </div>
   </div>
 
@@ -97,11 +98,11 @@
   </div>
 </div>
 
-<script src="mode.js?v=27"></script>
+<script src="mode.js?v=28"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="engine.js?v=27"></script>
-<script src="states.js?v=27"></script>
-<script src="shared.js?v=27"></script>
+<script src="engine.js?v=28"></script>
+<script src="states.js?v=28"></script>
+<script src="shared.js?v=28"></script>
 <script>
 const $ = id => document.getElementById(id);
 const act = PP.act;
@@ -127,12 +128,13 @@ function revealButtons(s, B) {
 }
 document.querySelectorAll('[data-a]').forEach(b => b.onclick = () => act(b.dataset.a));
 $('addTeam').onclick = () => { const n = $('newTeam').value.trim(); if (n) { act('addTeam', { name: n }); $('newTeam').value = ''; } };
+$('defaultTeams').onclick = () => { if (confirm('Replace the teams with the four default teams (CNSTTTNLWYR, SCNCEGY, GEHLTHCR, PJMKRNDMR)? Scores start at 0 and phones pick their team again.')) act('defaultTeams'); };
 $('newTeam').onkeydown = e => { if (e.key === 'Enter') $('addTeam').click(); };
 $('shuffle').onchange = () => act('shuffle', { on: $('shuffle').checked });
 $('speedReady').onclick = () => act('speedReady', { teamId: $('speedTeam').value });
 $('newGame').onclick = () => {
   if (!confirm('Start a new game? Scores reset and every plate becomes unplayed.')) return;
-  act('newGame', { keepTeams: confirm('Keep the same teams?\n\nOK = keep teams (scores go to 0)\nCancel = everyone rejoins on their phone') });
+  act('newGame', { keepTeams: confirm('Keep the same teams?\n\nOK = keep these teams (scores go to 0)\nCancel = start over with the four default teams') });
 };
 $('savePuzzles').onclick = () => {
   if (PP.state && PP.state.used.length && !confirm('Saving restarts the plate list from the top. Continue?')) return;
