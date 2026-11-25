@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0e1726">
 <title>Plate Pursuit · Buzzer</title>
-<link rel="stylesheet" href="style.css?v=21">
+<link rel="stylesheet" href="style.css?v=22">
 </head>
 <body class="phone-page">
 <div class="phone" id="app"></div>
-<script src="mode.js?v=21"></script>
+<script src="mode.js?v=22"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="shared.js?v=21"></script>
+<script src="shared.js?v=22"></script>
 <script>
 const app = document.getElementById('app');
 if (PP.needRoom('JOIN THE GAME')) throw new Error('waiting for room code');
@@ -20,37 +20,68 @@ let me = null;
 try { me = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
 let pending = false, lastBuzzMine = false;
 
-let joining = false;
+let joining = false, typing = false, pickKey = '';
+// Join screen: tap the team you're on (teams the host set up), or type a new one if yours isn't listed.
 function showJoin(msg, keepName = '') {
-  joining = false;
+  joining = false; pickKey = '';
   app.innerHTML = `<div class="p-join">
     <div class="p-plate">${plateHTML('PL8 PRST')}</div>
-    <h1>JOIN THE GAME</h1>
+    <h1>WHICH TEAM ARE YOU?</h1>
     ${PP.room ? `<div class="p-small">Room <b class="room-code">${esc(PP.room)}</b> · <button id="otherRoom">different room</button></div>` : ''}
-    <input id="name" maxlength="24" placeholder="Team name" autocomplete="off" value="${esc(keepName)}">
-    <button class="btn primary" id="go">Join</button>
+    <div class="p-pick" id="pick"></div>
+    <div class="p-new" id="newWrap" ${typing || keepName ? '' : 'hidden'}>
+      <input id="name" maxlength="24" placeholder="Team name" autocomplete="off" value="${esc(keepName)}">
+      <button class="btn primary" id="go">Join</button>
+    </div>
+    <div class="p-small"><button id="notListed">${typing ? 'Back to the team list' : "My team isn't listed"}</button></div>
     <div class="p-status ${msg ? 'bad' : ''}" id="jstatus">${esc(msg || '')}</div>
     <div class="p-small">Everyone on a team can use one phone.</div></div>`;
-  const go = async () => {
-    if (joining) return;
+  const goNew = () => {
     const name = document.getElementById('name').value.trim();
     if (!name) return document.getElementById('name').focus();
-    joining = true;
-    const btn = document.getElementById('go');
-    btn.disabled = true; btn.textContent = 'Joining…';
-    joinStatus();
-    const r = await PP.post('/join', { name });
-    if (!r.ok) return showJoin(PP.local ? "Couldn't reach the game. Is this phone on the same Wi-Fi as the host's computer?"
-      : (PP.status || "Couldn't reach the host. Check the room code and try again."), name);
-    me = { id: r.team.id };
-    try { localStorage.setItem(KEY, JSON.stringify(me)); } catch (e) {}
-    start();
+    joinAs({ name }, document.getElementById('go'), name);
   };
-  document.getElementById('go').onclick = go;
-  document.getElementById('name').onkeydown = e => { if (e.key === 'Enter') go(); };
+  document.getElementById('go').onclick = goNew;
+  document.getElementById('name').onkeydown = e => { if (e.key === 'Enter') goNew(); };
+  document.getElementById('notListed').onclick = () => { typing = !typing; showJoin(); if (typing) document.getElementById('name').focus(); };
   const other = document.getElementById('otherRoom');
   if (other) other.onclick = () => { location.search = ''; };
+  renderPick(PP.state);
 }
+async function joinAs(data, btn, keepName = '') {
+  if (joining) return;
+  joining = true;
+  if (btn) { btn.disabled = true; btn.dataset.label = btn.innerHTML; btn.textContent = 'Joining…'; }
+  joinStatus();
+  const r = await PP.post('/join', data);
+  if (!r.ok || !r.team) return showJoin(PP.local ? "Couldn't reach the game. Is this phone on the same Wi-Fi as the host's computer?"
+    : (PP.status || "Couldn't reach the host. Check the room code and try again."), keepName);
+  me = { id: r.team.id };
+  try { localStorage.setItem(KEY, JSON.stringify(me)); } catch (e) {}
+  typing = false;
+  start();
+}
+function renderPick(s) {
+  const el = document.getElementById('pick'); if (!el || joining) return;
+  const listed = !typing && s && s.teams.length;
+  const key = JSON.stringify([typing, s && s.teams.map(t => [t.id, t.name, t.color, !!(s.online || {})[t.id]])]);
+  if (key === pickKey) return;
+  pickKey = key;
+  const nw = document.getElementById('newWrap'), nl = document.getElementById('notListed');
+  if (!s) { el.innerHTML = `<div class="p-small">Loading the teams…</div>`; return; }
+  if (!s.teams.length) {   // nobody set up teams: just type a name
+    el.innerHTML = ''; nw.hidden = false; nl.parentElement.hidden = true; return;
+  }
+  nl.parentElement.hidden = false; nw.hidden = !typing;
+  el.innerHTML = listed ? s.teams.map(t => { const taken = !!(s.online || {})[t.id];
+    return `<button class="p-team ${taken ? 'taken' : ''}" data-id="${t.id}" style="${teamStyle(t)}"><span class="nm">${esc(t.name)}</span><small>${taken ? 'a phone is already on this team' : 'tap to join'}</small></button>`; }).join('') : '';
+  el.querySelectorAll('[data-id]').forEach(b => b.onclick = () => {
+    const t = s.teams.find(x => String(x.id) === b.dataset.id); if (!t) return;
+    if (b.classList.contains('taken') && !confirm(`${t.name} already has a phone. Use this phone for ${t.name} too?`)) return;
+    joinAs({ teamId: t.id, name: t.name }, b);
+  });
+}
+PP.on(renderPick);
 // While joining, show what the connection is doing instead of a silent button.
 function joinStatus() {
   const el = document.getElementById('jstatus');
@@ -227,7 +258,7 @@ PP.on(render);
 setInterval(() => { const s = PP.state, el = document.getElementById('fcd'); if (el && s && s.phase === 'fanswer') { const l = ppFinalLeft(s); el.textContent = l == null ? '' : Math.ceil(l) + 's'; } }, 200);
 // tick the answer countdown on the phone that buzzed
 setInterval(() => { const s = PP.state; if (s && s.phase === 'buzzed' && me && s.buzzed === me.id && document.getElementById('buzzLabel')) document.getElementById('buzzLabel').textContent = Math.ceil(ppAnswerLeft(s)); }, 100);
-if (me && me.id) start(); else { showJoin(); if (!PP.local) PP.connect(); }
+if (me && me.id) start(); else { showJoin(); PP.connect(); }   // connect first so the team list shows
 </script>
 </body>
 </html>

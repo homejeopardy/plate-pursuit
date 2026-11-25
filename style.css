@@ -428,3 +428,15 @@ body.crew-page { background: var(--asphalt); color: #fff; min-height: 100vh; }
 .plate.look.slogan-script .plate-bottom { font-size: 9cqh; bottom: 3.6cqh; }
 .plate.look.name-bottom .plate-top { font-size: 9.5cqh; bottom: 4.2cqh; }
 .plate.look.name-bottom.name-script .plate-top { font-size: 11cqh; }
+
+/* phone join screen: pick your team */
+.p-pick { display: grid; gap: 10px; }
+.p-team { display: grid; gap: 2px; text-align: left; padding: 14px 16px 11px; border: 0; border-radius: 8px; color: #fff;
+  background: var(--team, var(--green)); box-shadow: inset 0 0 0 3px rgba(255,255,255,.85), 0 4px 0 rgba(0,0,0,.35); cursor: pointer; }
+.p-team .nm { font: 900 24px/1.05 var(--font); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p-team small { font: 600 13px/1.2 var(--font); opacity: .9; }
+.p-team:active { transform: translateY(2px); box-shadow: inset 0 0 0 3px rgba(255,255,255,.85), 0 2px 0 rgba(0,0,0,.35); }
+.p-team.taken { opacity: .6; }
+.p-team:disabled { opacity: .7; }
+.p-new[hidden] { display: none; }
+.p-new { display: grid; gap: 10px; }
