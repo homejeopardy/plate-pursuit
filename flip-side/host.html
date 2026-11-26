@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Flip Side · Host</title>
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body class="host-page">
 <div class="host">
@@ -80,14 +80,14 @@
 
   <div class="card">
     <h2>Shortcuts <span class="note">(also work while the projector window is in front)</span></h2>
-    <div class="note">⌃⇧G go (next step) · ⌃⇧V solve · ⌃⇧A pick again · ⌃⇧C correct · ⌃⇧X wrong · ⌃⇧P pass turn · ⌃⇧R reveal puzzle · ⌃⇧U undo · ⌃⇧N next puzzle · ⌃⇧J join screen · ⌃⇧E final standings</div>
+    <div class="note">⌃⇧G go (next step) · ⌃⇧V solve · ⌃⇧A pick again · ⌃⇧C correct · ⌃⇧X wrong · ⌃⇧P pass turn · ⌃⇧R reveal puzzle · ⌃⇧U undo · ⌃⇧N next puzzle · ⌃⇧J join screen · ⌃⇧E final standings · ⌃⇧1…⌃⇧0 flip cards 1–10 · ⌃⌥⇧1…⌃⌥⇧0 flip cards 11–20</div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="starters.js?v=3"></script>
-<script src="net.js?v=3"></script>
-<script src="engine.js?v=3"></script>
+<script src="starters.js?v=4"></script>
+<script src="net.js?v=4"></script>
+<script src="engine.js?v=4"></script>
 <script>
 const $ = id => document.getElementById(id);
 const act = (type, data) => {
@@ -148,6 +148,13 @@ function runKey(k) {
   const s = PP.state;
   if (k === 'go') return goStep(s);
   if (k === 'solve') return act('solve');
+  if (k.startsWith('card:')) {   // a card key: flip that card (after a match it means "pick two more")
+    const n = Number(k.slice(5));
+    if (!s || !s.board[n - 1] || s.board[n - 1].gone) return;
+    if (s.phase === 'match') act('again');
+    if (s.phase === 'pick' || s.phase === 'match') act('flip', { n });
+    return;
+  }
   act(k);
 }
 document.addEventListener('keydown', e => { const n = fsKeyName(e); if (n) { e.preventDefault(); runKey(n); } });

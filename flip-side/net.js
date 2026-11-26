@@ -280,8 +280,10 @@ const PP = (() => {
       return Promise.resolve({ ok: false });
     },
     // Projector and phones need a room code on the website. Shows a form and returns true when it's missing.
-    needRoom(title) {
+    needRoom(title, useSaved) {
       if (LOCAL || room) return false;
+      // the projector and host script opened on the host's own computer (a bookmark, a Stream Dock key) use the host's room
+      if (useSaved) { const saved = safe(() => localStorage.getItem(PREFIX + 'room')); if (saved && /^[A-Z]{4}$/.test(saved)) { room = saved; return false; } }
       document.body.innerHTML = `<form class="room-form" id="roomForm">
         <div class="sign green">${esc(title)}</div>
         <p>Type the room code shown on the projector or the host's screen.</p>
@@ -366,7 +368,13 @@ function fsResultText(s) {
 }
 // ---- keyboard shortcuts (stream deck): Ctrl+Shift+letter
 const FS_KEYS = { KeyG: 'go', KeyC: 'correct', KeyX: 'wrong', KeyU: 'undo', KeyN: 'next', KeyV: 'solve', KeyA: 'again', KeyP: 'pass', KeyR: 'reveal', KeyJ: 'lobby', KeyE: 'final' };
-function fsKeyName(e) { return e.ctrlKey && e.shiftKey && !e.metaKey && !e.altKey ? FS_KEYS[e.code] || null : null; }
+function fsKeyName(e) {
+  if (!e.ctrlKey || !e.shiftKey || e.metaKey) return null;
+  // cards: Ctrl+Shift+1…9,0 flips cards 1–10; add Option/Alt for cards 11–20
+  const d = /^Digit(\d)$/.exec(e.code);
+  if (d) return 'card:' + ((Number(d[1]) || 10) + (e.altKey ? 10 : 0));
+  return e.altKey ? null : FS_KEYS[e.code] || null;
+}
 const _keyChan = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('flip-side-keys') : null;
 function fsForwardKeys() {
   if (!_keyChan) return;
