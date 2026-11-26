@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Host</title>
-<link rel="stylesheet" href="style.css?v=32">
+<link rel="stylesheet" href="style.css?v=33">
 </head>
 <body class="host-page">
 <div class="host">
@@ -98,11 +98,11 @@
   </div>
 </div>
 
-<script src="mode.js?v=32"></script>
+<script src="mode.js?v=33"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="engine.js?v=32"></script>
-<script src="states.js?v=32"></script>
-<script src="shared.js?v=32"></script>
+<script src="engine.js?v=33"></script>
+<script src="states.js?v=33"></script>
+<script src="shared.js?v=33"></script>
 <script>
 const $ = id => document.getElementById(id);
 const act = PP.act;
@@ -193,7 +193,7 @@ function finalPanel(s) {
       <button class="btn mini bad" data-mark="${t.id}" data-right="0">${m === false ? '✗ Wrong' : 'Wrong'}</button></td><td class="score-cell">${t.score}</td></tr>`;
   }).join('');
   const head = s.phase === 'fwager' ? 'Teams bet on their phones (0 up to their score). Show the plate when everyone is in; no bet counts as 0.'
-    : s.phase === 'fanswer' ? "Teams type their answers on their phones. You can mark each one right or wrong as it comes in; nobody sees it until that team's answer goes on screen. If a team changes its answer, its mark is cleared." : 'Answers go on screen one team at a time, lowest score first (Space). Mark each one: right adds their bet, wrong takes it away. Tap again to unmark. Then reveal the real answer piece by piece.';
+    : s.phase === 'fanswer' ? "Teams type their answers on their phones. You can mark each one right or wrong as it comes in; nobody sees it until that team's answer goes on screen. If a team changes its answer, its mark is cleared." : 'Answers go on screen one team at a time, left to right like the team boxes (⌃⇧G). Mark each one: right adds their bet, wrong takes it away. Tap again to unmark. Then reveal the real answer piece by piece.';
   return `<div class="note">${head}</div><table class="fin-table">${rows}</table>`;
 }
 

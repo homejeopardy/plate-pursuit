@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Projector</title>
-<link rel="stylesheet" href="style.css?v=32">
+<link rel="stylesheet" href="style.css?v=33">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body class="display-page">
@@ -16,10 +16,10 @@
 <div class="unlock" id="unlock"><div class="sign green">Click to start the projector<small>Turns on sound and goes full screen</small></div></div>
 <div class="conn" id="conn"></div>
 
-<script src="mode.js?v=32"></script>
+<script src="mode.js?v=33"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="states.js?v=32"></script>
-<script src="shared.js?v=32"></script>
+<script src="states.js?v=33"></script>
+<script src="shared.js?v=33"></script>
 <script>
 const $ = id => document.getElementById(id);
 let lastEv = null, lastKey = '', lastPlateKey = '', fxNext = null;
@@ -175,7 +175,7 @@ function fitStage() {
 if (window.ResizeObserver) new ResizeObserver(() => fitStage()).observe(document.getElementById('stage'));
 addEventListener('resize', fitStage);
 document.fonts && document.fonts.ready.then(fitStage);
-function renderTeams(s) {
+function renderTeams(s, scoring = false) {
   const roundNames = { lobby: '', ready: 'Buzz-in round', running: 'Buzz-in round', buzzed: 'Buzz-in round', paused: 'Buzz-in round', revealed: 'Buzz-in round',
     speedready: 'Speed round', speed: 'Speed round', speedover: 'Speed round', final: 'Game over', awards: 'Awards',
     fwager: 'Final plate', fanswer: 'Final plate', fjudge: 'Final plate' };
@@ -193,7 +193,8 @@ function renderTeams(s) {
       sub = esc(s.fin.answers[t.id] || '(no answer)') + (m === true ? ` <b class="plus">+${w}</b>` : m === false ? ` <b class="minus">−${w}</b>` : '');
     }
     const sc = ppShownScore(s, t);
-    if (prevScore[t.id] != null && sc !== prevScore[t.id]) bumps[t.id] = { until: Date.now() + 1600, d: sc - prevScore[t.id], n: ((bumps[t.id] || {}).n || 0) + 1 };
+    // the +/− number only shows for a real scoring moment (not undo, new game, or a late message)
+    if (scoring && prevScore[t.id] != null && sc !== prevScore[t.id]) bumps[t.id] = { until: Date.now() + 1600, d: sc - prevScore[t.id], n: ((bumps[t.id] || {}).n || 0) + 1 };
     prevScore[t.id] = sc;
     const b = bumps[t.id] && bumps[t.id].until > Date.now() ? bumps[t.id] : null;
     return `<div class="sign green d-team ${cls} ${b ? (b.d > 0 ? 'bump' : 'bump down') : ''}" style="${teamStyle(t)}" data-b="${b ? b.n : 0}"><div class="n">${esc(t.name)}</div><div class="s">${sc}</div>${sub ? `<div class="sub">${sub}</div>` : ''}${b ? `<div class="delta">${b.d > 0 ? '+' : '−'}${Math.abs(b.d)}</div>` : ''}</div>`;
@@ -255,7 +256,7 @@ PP.on(s => {
   else if (s.ev.n !== lastEv) { lastEv = s.ev.n; SFX.play(s.ev.type); fxNext = s.ev.type; }
   const k = stageKey(s);
   if (k !== lastKey) { lastKey = k; renderStage(s); }
-  renderTeams(s); tick(); fitStage();
+  renderTeams(s, ['correct', 'wrong', 'show'].includes(fxNext)); tick(); fitStage();
   if (fxNext) { fx(fxNext, s); fxNext = null; }
 });
 PP.connect();

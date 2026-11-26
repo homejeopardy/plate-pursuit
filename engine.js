@@ -526,8 +526,8 @@ function createEngine(opts = {}) {
     finalLock() {
       if (S.phase !== 'fanswer') return;
       S.fin.endsAt = null; markUsed(S.cur); S.phase = 'fjudge'; S.step = 0; fire('reveal');
-      // teams' answers are shown one at a time, lowest score first
-      S.fin.order = [...S.teams].sort((a, b) => (S.fin.base[a.id] ?? a.score) - (S.fin.base[b.id] ?? b.score)).map(t => t.id); S.fin.shown = 0;
+      // teams' answers are shown one at a time, left to right in the order of the team boxes
+      S.fin.order = S.teams.map(t => t.id); S.fin.shown = 0;
     },
     finalNext() { if (S.phase === 'fjudge' && S.fin.shown < S.fin.order.length) { S.fin.shown++; fire('show'); } },
     // reveal the answer one piece of the plate at a time

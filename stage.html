@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#262626">
 <title>Plate Pursuit · Host script</title>
-<link rel="stylesheet" href="style.css?v=32">
+<link rel="stylesheet" href="style.css?v=33">
 </head>
 <body class="crew-page">
 <div class="crew-wrap" id="app">
@@ -18,10 +18,10 @@
   <div class="cr-scores" id="scores"></div>
   <div class="cr-conn" id="conn"></div>
 </div>
-<script src="mode.js?v=32"></script>
+<script src="mode.js?v=33"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="states.js?v=32"></script>
-<script src="shared.js?v=32"></script>
+<script src="states.js?v=33"></script>
+<script src="shared.js?v=33"></script>
 <script>
 const $ = id => document.getElementById(id);
 if (PP.needRoom('HOST SCRIPT')) throw new Error('waiting for room code');
@@ -66,7 +66,7 @@ function script(s) {
     case 'fanswer': return [`Here's the final plate.`, `Type your answer on your phone. You have ${Math.round(s.settings.finalSeconds)} seconds!`];
     case 'fjudge': {
       const f = s.fin;
-      if (!f.shown) return [`Time's up! Let's see what you wrote, starting with the lowest score.`];
+      if (!f.shown) return [`Time's up! Let's see what you wrote, going left to right.`];
       if (f.shown <= f.order.length && (f.shown < f.order.length || s.step === 0)) {
         const id = f.order[f.shown - 1], t = s.teams.find(x => x.id === id) || {}, w = f.wagers[id] || 0, m = f.marks[id];
         const lines = [`${tn(s, id)} wrote: <b>“${esc(f.answers[id] || 'nothing')}”</b>`];
