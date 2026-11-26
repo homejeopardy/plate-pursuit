@@ -244,7 +244,8 @@ var FS_STARTERS = [
 {
 "img": "images/esl-09-11.jpg",
 "answer": "Micronesia",
-"src": "esl"
+"src": "esl",
+"final": true
 },
 {
 "img": "images/esl-09-12.jpg",

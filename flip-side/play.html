@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#1d5a3c">
 <title>Flip Side · Phone</title>
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body class="play-page">
 <div class="p-wrap" id="app"></div>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="net.js?v=5"></script>
+<script src="net.js?v=6"></script>
 <script>
 const app = document.getElementById('app');
 const $ = id => document.getElementById(id);
@@ -99,12 +99,29 @@ function render(s) {
   $('meBox').style.cssText = teamStyle(t);
   $('nm').textContent = t.name; $('sc').textContent = t.score;
   const pot = fsPot(s, t.id);
-  $('pot').textContent = pot && !['solved', 'lobby', 'final'].includes(s.phase) ? `+${pot} if you solve` : '';
+  const myWager = (s.wagers || {})[me.id];
+  $('pot').textContent = s.fin && !['solved', 'lobby', 'final'].includes(s.phase) ? (myWager != null ? `Wager ${myWager}` : '')
+    : pot && !['solved', 'lobby', 'final'].includes(s.phase) ? `+${pot} if you solve` : '';
   if (!flashT || !$('status').textContent) $('status').textContent = PP.status || '';
   const turn = s.teams.find(x => x.id === s.turn), myTurn = s.turn === me.id;
   let h = '';
   const M = (big, small = '') => `<div class="p-msg">${big}${small ? `<small>${small}</small>` : ''}</div>`;
-  if (s.phase === 'lobby') h = M("You're in!", 'Watch the big screen. The game starts soon.');
+  const finBuzz = s.fin && ['pick', 'match', 'miss', 'lost', 'buzz'].includes(s.phase);
+  const out = s.fin && s.locked.includes(me.id);
+  const buzzBtn = () => out ? M("You've had your guess", 'Wait for the others.') : `<button class="p-big buzz" id="buzzBtn">SOLVE IT!<small style="display:block;font-size:.5em">right: +${myWager || 0} · wrong: −${myWager || 0}</small></button>`;
+  if (s.phase === 'wager') {
+    const max = Math.max(t.score, 500);
+    h = M('FINAL WAGER', `Bet up to ${max}. Buzz in any time to solve. Right wins your wager, wrong loses it.`) +
+      `<input id="wagerIn" type="number" inputmode="numeric" min="0" max="${max}" step="100" value="${myWager ?? ''}" placeholder="0 to ${max}" style="font-size:28px;text-align:center;width:100%;padding:10px;border-radius:10px;border:0">
+       <button class="p-big again" id="wagerBtn" style="margin-top:10px">${myWager != null ? `Change wager (now ${myWager})` : 'Lock in wager'}</button>`;
+  }
+  else if (finBuzz && s.phase !== 'buzz') {
+    const myT = s.turn === me.id && !out;
+    h = buzzBtn() + (s.phase === 'pick' && myT ? M('Your turn!', s.flips.length ? 'Pick one more card.' : 'Pick two cards.') + gridHTML(s, true)
+      : s.phase === 'match' && myT ? M(esc(fsResultText(s))) + (fsLeft(s) ? `<button class="p-big again" id="againBtn">Pick two more</button>` : '')
+      : M(s.phase === 'pick' ? `${esc(turn ? turn.name : '')} is picking` : esc(fsResultText(s) || '')) + gridHTML(s, false));
+  }
+  else if (s.phase === 'lobby') h = M("You're in!", 'Watch the big screen. The game starts soon.');
   else if (s.phase === 'final') {
     const r = fsRanking(s), mine = r.find(x => x.team.id === me.id);
     h = M(mine && mine.rank === 1 ? 'You win!' : `You came #${mine ? mine.rank : '?'}`, 'Thanks for playing!') +
@@ -125,7 +142,8 @@ function render(s) {
     const solver = s.teams.find(x => x.id === s.solver);
     h = s.solver === me.id ? M('Say your answer out loud!') + `<div class="p-count" id="count"></div>` : M(`${esc(solver ? solver.name : '')} is solving…`);
   } else if (s.phase === 'buzz') {
-    h = s.locked.includes(me.id) ? M("You've had your guess", 'Wait for the others.') : M('Board clear!', 'First to buzz gets to solve.') + `<button class="p-big buzz" id="buzzBtn">SOLVE!</button>`;
+    h = s.fin ? M('Board clear!', 'Buzz in to solve.') + buzzBtn()
+      : s.locked.includes(me.id) ? M("You've had your guess", 'Wait for the others.') : M('Board clear!', 'First to buzz gets to solve.') + `<button class="p-big buzz" id="buzzBtn">SOLVE!</button>`;
   } else if (s.phase === 'solved') {
     const r = s.result || {};
     h = r.kind === 'solved' ? M(r.team === me.id ? `You solved it! +${r.points}` : `${esc(teamName(s, r.team))} solved it`, `It was: ${esc((fsPuzzle(s) || {}).answer || '')}`)
@@ -136,6 +154,8 @@ function render(s) {
     m.querySelectorAll('.p-grid.mine button[data-n]').forEach(b => b.onclick = () => { if (navigator.vibrate) navigator.vibrate(30); send('/flip', { n: Number(b.dataset.n) }); });
     if ($('solveBtn')) $('solveBtn').onclick = () => send('/solve');
     if ($('againBtn')) $('againBtn').onclick = () => send('/again');
+    if ($('wagerBtn')) $('wagerBtn').onclick = () => { const v = Number($('wagerIn').value); if (!Number.isFinite(v) || v < 0) return $('wagerIn').focus(); send('/wager', { amount: v }); };
+    if ($('wagerIn')) $('wagerIn').onkeydown = e => { if (e.key === 'Enter') $('wagerBtn').click(); };
     if ($('buzzBtn')) $('buzzBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (navigator.vibrate) navigator.vibrate(150); send('/solve'); });
   }
   tick();

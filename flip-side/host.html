@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Flip Side · Host</title>
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body class="host-page">
 <div class="host">
@@ -45,6 +45,7 @@
     <div class="row">
       <button class="btn" data-a="lobby">Show join screen <kbd>⌃⇧J</kbd></button>
       <button class="btn primary" data-a="next">Next puzzle <kbd>⌃⇧N</kbd></button>
+      <button class="btn" data-a="finalPuzzle" title="Plays the puzzle marked FINAL WAGER in the Puzzles list">Final wager puzzle ★</button>
       <button class="btn gold" data-a="final">Final standings <kbd>⌃⇧E</kbd></button>
       <button class="btn" data-a="theme">Play theme ♪</button>
       <label class="check"><input type="checkbox" id="shuffle"> Shuffle puzzles</label>
@@ -57,7 +58,7 @@
       <label>Wrong-answer penalty <input class="text-in" type="number" min="0" step="50" data-s="wrongPenalty"></label>
       <label>Seconds cards stay up <input class="text-in" type="number" min="1" data-s="peekSeconds"></label>
     </div>
-    <p class="note" style="margin-bottom:0">Board: 20 cards. Seven pairs of points (100 to 700), a TAKE pair (steals the biggest card another team matched this puzzle), two LOSE A TURN cards (turning one over ends your turn, and that card comes off) and two WILD cards (a wild matches any card, and that card's twin comes off too). Only the team that solves banks its matches, plus the solve bonus. If the board is cleared without a solve, every team can buzz in.</p>
+    <p class="note" style="margin-bottom:0">Board: 20 cards. Seven pairs of points (100 to 700), a TAKE pair (steals the biggest card another team matched this puzzle), two LOSE A TURN cards (turning one over ends your turn, and that card comes off) and two WILD cards (a wild matches any card, and that card's twin comes off too). Only the team that solves banks its matches, plus the solve bonus. If the board is cleared without a solve, every team can buzz in.<br><b>Final wager puzzle ★</b> (Micronesia to start with; mark others with ★ in the Puzzles list): each team bets up to its score, or up to 500 if it has less. Then the board plays as usual, but any team can buzz in at any point. A right answer wins the wager and a wrong one loses it, and that team sits out the rest of the puzzle. Card points don't count. Next puzzle skips final wager puzzles.</p>
   </div>
 
   <div class="card">
@@ -85,9 +86,9 @@
 </div>
 <div class="toast" id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="starters.js?v=5"></script>
-<script src="net.js?v=5"></script>
-<script src="engine.js?v=5"></script>
+<script src="starters.js?v=6"></script>
+<script src="net.js?v=6"></script>
+<script src="engine.js?v=6"></script>
 <script>
 const $ = id => document.getElementById(id);
 const act = (type, data) => {
@@ -140,6 +141,7 @@ $('search').oninput = () => render(PP.state);
 // ---------- what Go does at each step ----------
 function goStep(s) {
   if (!s) return;
+  if (s.phase === 'wager') return act('startBoard');
   if (s.phase === 'lobby' || s.phase === 'solved') return act('next');
   if (s.phase === 'miss' || s.phase === 'lost') return act('hide');
   if (s.phase === 'match') return act('again');
@@ -161,7 +163,7 @@ document.addEventListener('keydown', e => { const n = fsKeyName(e); if (n) { e.p
 fsOnForwardedKey(runKey);
 
 // ---------- rendering ----------
-const PHASE = { lobby: 'Join screen', pick: 'Picking', match: 'Match!', miss: 'No match', lost: 'Lose a turn', solve: 'Solving', buzz: 'Board clear: buzz in', solved: 'Puzzle over', final: 'Final standings' };
+const PHASE = { lobby: 'Join screen', pick: 'Picking', match: 'Match!', miss: 'No match', lost: 'Lose a turn', wager: 'Final wager: teams are betting', solve: 'Solving', buzz: 'Board clear: buzz in', solved: 'Puzzle over', final: 'Final standings' };
 const imgSrc = {};
 function picInto(img, id) {
   if (!id) { img.removeAttribute('src'); return; }
@@ -169,7 +171,7 @@ function picInto(img, id) {
   PP.getImage(id).then(src => { if (src) { imgSrc[id] = src; if (img.dataset.want === id) img.src = src; } });
   img.dataset.want = id;
 }
-let lastPzHTML = '';
+let lastPzHTML = '', lastControls = '';
 function render(s) {
   if (!s) return;
   $('join').innerHTML = `Room <b>${esc(s.room || PP.room || '')}</b> · phones join at ${esc(s.joinUrl || '')}${PP.status ? ' · ' + esc(PP.status) : ''}`;
@@ -183,6 +185,8 @@ function render(s) {
   let st = PHASE[s.phase] || s.phase;
   if (who && ['pick', 'match', 'miss', 'lost'].includes(s.phase)) st = `<span class="tm" style="${teamStyle(who)}">${esc(who.name)}</span> ${s.phase === 'pick' ? (s.flips.length ? 'picks a second card' : 'picks two cards') : esc(PHASE[s.phase])}`;
   if (s.phase === 'solve' && who) st = `<span class="tm" style="${teamStyle(who)}">${esc(who.name)}</span> is solving <span class="h-count" id="hCount"></span>`;
+  if (s.fin && s.phase !== 'wager') st = `<b>FINAL WAGER</b> · ${st}`;
+  if (s.phase === 'wager') st += ` · ${Object.keys(s.wagers || {}).length} of ${s.teams.length} wagers in`;
   if (s.phase === 'buzz' && s.locked.length) st += ` · already tried: ${s.locked.map(id => esc(teamName(s, id))).join(', ')}`;
   $('hStatus').innerHTML = st;
   $('hResult').textContent = (fsResultText(s) || '') + (s.undoLabel ? `   (Undo: ${s.undoLabel})` : '');
@@ -193,14 +197,23 @@ function render(s) {
   if (s.phase === 'pick') c = B('pass', 'Pass turn', '', '⌃⇧P');
   if (s.phase === 'match') c = B('solve', 'Solve it', 'gold', '⌃⇧V') + (fsLeft(s) ? B('again', 'Pick two more', 'primary', '⌃⇧G') : '') + B('pass', 'Pass turn', '', '⌃⇧P');
   if (s.phase === 'miss' || s.phase === 'lost') c = B('hide', 'Next team now', 'primary', '⌃⇧G');
-  if (s.phase === 'solve') c = B('correct', 'Correct', 'good', '⌃⇧C') + B('wrong', s.settings && s.settings.wrongPenalty ? `Wrong (−${s.settings.wrongPenalty})` : 'Wrong', 'bad', '⌃⇧X');
+  const W = id => Number((s.wagers || {})[id]) || 0;
+  if (s.phase === 'solve') c = s.fin ? B('correct', `Correct (+${W(s.solver)})`, 'good', '⌃⇧C') + B('wrong', `Wrong (−${W(s.solver)})`, 'bad', '⌃⇧X')
+    : B('correct', 'Correct', 'good', '⌃⇧C') + B('wrong', s.settings && s.settings.wrongPenalty ? `Wrong (−${s.settings.wrongPenalty})` : 'Wrong', 'bad', '⌃⇧X');
+  if (s.phase === 'wager') c = `<div class="h-wagers">${s.teams.map(t => `<label style="${teamStyle(t)}"><span class="tm">${esc(t.name)}</span> bets <input class="text-in" type="number" min="0" step="100" max="${Math.max(t.score, 500)}" data-wager="${t.id}" placeholder="0–${Math.max(t.score, 500)}" style="width:110px"></label>`).join('')}</div>` + B('startBoard', 'Start the board', 'primary', '⌃⇧G');
+  if (s.fin && ['pick', 'match', 'miss', 'lost'].includes(s.phase)) c = s.teams.filter(t => !s.locked.includes(t.id)).map(t => `<button class="btn" style="border-color:${teamColor(t)}" data-solve="${t.id}">${esc(t.name)} buzzed</button>`).join('') + c;
   if (s.phase === 'buzz') c = s.teams.filter(t => !s.locked.includes(t.id)).map(t => `<button class="btn" style="border-color:${teamColor(t)}" data-solve="${t.id}">${esc(t.name)} buzzed</button>`).join('');
   if (s.phase === 'solved') c = B('next', 'Next puzzle', 'primary', '⌃⇧G') + B('final', 'Final standings', 'gold', '⌃⇧E');
   if (['pick', 'match', 'miss', 'lost', 'buzz', 'solve'].includes(s.phase)) c += B('reveal', 'Reveal puzzle (no points)', '', '⌃⇧R');
   c += `<button class="btn" data-c="undo"${s.undoLabel ? '' : ' disabled'}>Undo <kbd>⌃⇧U</kbd></button>`;
+  if (c !== lastControls) {   // rebuilt only when it changes, so typing a wager isn't interrupted
+  lastControls = c;
   $('controls').innerHTML = c;
+  $('controls').querySelectorAll('[data-wager]').forEach(i => i.onchange = () => act('wager', { teamId: Number(i.dataset.wager), amount: i.value }));
   $('controls').querySelectorAll('[data-c]').forEach(b => b.onclick = () => act(b.dataset.c));
   $('controls').querySelectorAll('[data-solve]').forEach(b => b.onclick = () => act('solve', { teamId: Number(b.dataset.solve) }));
+  }
+  $('controls').querySelectorAll('[data-wager]').forEach(i => { if (document.activeElement !== i) { const w = (s.wagers || {})[i.dataset.wager]; i.value = w == null ? '' : w; } });
   // the board
   const playing = s.board.length && !['lobby', 'final'].includes(s.phase);
   $('hBoard').innerHTML = playing ? s.board.map(cd => {
@@ -213,7 +226,7 @@ function render(s) {
     const pot = fsPot(s, t.id);
     return `<div class="h-team${s.turn === t.id && ['pick', 'match', 'miss', 'lost'].includes(s.phase) ? ' turn' : ''}" style="${teamStyle(t)}">
       <span class="sw"></span>
-      <span class="nm">${esc(t.name)}<span class="dot${s.online && s.online[t.id] ? ' on' : ''}" title="${s.online && s.online[t.id] ? 'Phone connected' : 'No phone'}"></span>${pot ? `<small>+${pot} this puzzle</small>` : ''}</span>
+      <span class="nm">${esc(t.name)}<span class="dot${s.online && s.online[t.id] ? ' on' : ''}" title="${s.online && s.online[t.id] ? 'Phone connected' : 'No phone'}"></span>${s.fin && (s.wagers || {})[t.id] != null && !['lobby', 'final', 'solved'].includes(s.phase) ? `<small>wager ${s.wagers[t.id]}${s.locked.includes(t.id) ? ' · out' : ''}</small>` : pot ? `<small>+${pot} this puzzle</small>` : ''}</span>
       <span class="row">${['pick', 'match'].includes(s.phase) && s.turn !== t.id ? `<button class="btn small" data-turn="${t.id}">Their turn</button>` : ''}
         <button class="btn small" data-score="${t.id}" data-d="-100">−100</button><button class="btn small" data-score="${t.id}" data-d="100">+100</button></span>
       <span class="sc">${t.score}</span>
@@ -236,13 +249,14 @@ function render(s) {
   const curId = p ? p.id : null;
   const html = s.puzzles.map((x, i) => !q || x.answer.toLowerCase().includes(q) ? `<div class="h-pz${s.used.includes(x.id) ? ' used' : ''}${x.id === curId && !['lobby', 'final'].includes(s.phase) ? ' cur' : ''}">
     <div class="th" data-play="${i}" title="Play this puzzle now"><img data-img="${esc(x.img)}" alt="" loading="lazy"></div>
-    <div class="ans">${esc(x.answer)}${x.hint ? `<small>${esc(x.hint)}</small>` : ''}</div>
-    <div class="bar"><button class="btn small" data-edit="${esc(x.id)}">Edit</button><button class="btn small" data-up="${esc(x.id)}" title="Move earlier">↑</button><button class="btn small" data-down="${esc(x.id)}" title="Move later">↓</button><button class="btn small" data-del="${esc(x.id)}">Delete</button></div></div>` : '').join('');
+    <div class="ans">${x.final ? '<b style="color:#a77d12">★ FINAL WAGER</b><br>' : ''}${esc(x.answer)}${x.hint ? `<small>${esc(x.hint)}</small>` : ''}</div>
+    <div class="bar"><button class="btn small" data-edit="${esc(x.id)}">Edit</button><button class="btn small" data-up="${esc(x.id)}" title="Move earlier">↑</button><button class="btn small" data-down="${esc(x.id)}" title="Move later">↓</button><button class="btn small" data-fin="${esc(x.id)}" title="${x.final ? 'Make this a normal puzzle' : 'Make this a final wager puzzle'}">${x.final ? '★' : '☆'}</button><button class="btn small" data-del="${esc(x.id)}">Delete</button></div></div>` : '').join('');
   if (html !== lastPzHTML) {
     lastPzHTML = html; const L = $('puzzles'); L.innerHTML = html;
     L.querySelectorAll('img[data-img]').forEach(im => { const id = im.dataset.img; im.dataset.want = id; picInto(im, id); });
     L.querySelectorAll('[data-play]').forEach(b => b.onclick = () => { const x = PP.state.puzzles[Number(b.dataset.play)]; if (['pick', 'match', 'miss', 'lost', 'solve', 'buzz'].includes(PP.state.phase) && !confirm(`Stop this puzzle and play "${x.answer}" now?`)) return; act('load', { index: Number(b.dataset.play) }); });
     L.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => { const x = PP.state.puzzles.find(y => y.id === b.dataset.edit); const a = prompt('Answer', x.answer); if (a == null) return; const h = prompt('Hint for you (optional)', x.hint || ''); act('editPuzzle', { id: x.id, answer: a, hint: h == null ? x.hint : h }); });
+    L.querySelectorAll('[data-fin]').forEach(b => b.onclick = () => { const x = PP.state.puzzles.find(y => y.id === b.dataset.fin); act('setFinal', { id: x.id, on: !x.final }); });
     L.querySelectorAll('[data-up]').forEach(b => b.onclick = () => act('movePuzzle', { id: b.dataset.up, dir: -1 }));
     L.querySelectorAll('[data-down]').forEach(b => b.onclick = () => act('movePuzzle', { id: b.dataset.down, dir: 1 }));
     L.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { const x = PP.state.puzzles.find(y => y.id === b.dataset.del); if (confirm(`Delete "${x.answer}"?`)) { act('removePuzzle', { id: x.id }); if (/^up:/.test(x.img)) FSImages.del(x.img); } });

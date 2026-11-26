@@ -76,6 +76,7 @@ const PP = (() => {
     else if (msg.kind === 'flip') r.ok = engine.phoneFlip(msg.teamId, msg.n);
     else if (msg.kind === 'solve') r.ok = engine.phoneSolve(msg.teamId);
     else if (msg.kind === 'again') r.ok = engine.phoneAgain(msg.teamId);
+    else if (msg.kind === 'wager') r.ok = engine.phoneWager(msg.teamId, msg.amount);
     else if (msg.kind === 'color') r = engine.color(msg.teamId, msg.color);
     else if (msg.kind === 'img') { publishImage(msg.img); return; }
     else if (msg.kind === 'hello') { broadcast(); return; }
@@ -270,7 +271,7 @@ const PP = (() => {
     },
     post(url, data) {
       if (LOCAL) return httpPost(url, data);
-      const kinds = { '/join': 'join', '/flip': 'flip', '/solve': 'solve', '/again': 'again', '/color': 'color' };
+      const kinds = { '/join': 'join', '/flip': 'flip', '/solve': 'solve', '/again': 'again', '/color': 'color', '/wager': 'wager' };
       if (kinds[url]) return request(kinds[url], data);
       return Promise.resolve({ ok: false });
     },
@@ -355,11 +356,12 @@ function fsResultText(s) {
   const n = id => teamName(s, id);
   if (r.kind === 'miss') return 'No match';
   if (r.kind === 'match') {
+    if (r.effect === 'take' && r.fin) return 'TAKE: no points to take on this one';
     if (r.effect === 'take') return r.took ? `${n(r.team)} takes ${r.took.v} from ${n(r.took.from)}!` : `TAKE: nothing to take yet`;
     if (r.effect === 'lose') return `${n(r.team)} loses a turn`;
-    if (r.cards.every(c => c === 'WILD')) return `Two wilds! +${r.points}`;
-    if (r.cards.includes('WILD')) return `Wild card! +${r.points}`;
-    return `Match! +${r.points}`;
+    if (r.cards.every(c => c === 'WILD')) return r.fin ? 'Two wilds!' : `Two wilds! +${r.points}`;
+    if (r.cards.includes('WILD')) return r.fin ? 'Wild card!' : `Wild card! +${r.points}`;
+    return r.fin ? 'Match!' : `Match! +${r.points}`;
   }
   if (r.kind === 'wrong') return r.penalty ? `Not quite! ${n(r.team)} −${r.penalty}` : 'Not quite!';
   if (r.kind === 'solved') return `${n(r.team)} solves it! +${r.points}`;

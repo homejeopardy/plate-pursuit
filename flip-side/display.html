@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Flip Side · Projector</title>
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body class="display-page">
@@ -16,7 +16,7 @@
 <div class="d-conn" id="conn"></div>
 <button class="btn small d-sound" id="unlock">Click for sound + full screen</button>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="net.js?v=5"></script>
+<script src="net.js?v=6"></script>
 <script>
 const $ = id => document.getElementById(id);
 if (PP.needRoom('PROJECTOR', true)) throw new Error('waiting for room code');
@@ -94,13 +94,15 @@ function updateBoard(s, fresh) {
   const p = fsPuzzle(s) || {};
   if (s.phase === 'solve') {
     const t = s.teams.find(x => x.id === s.solver);
-    over = `<div class="d-solve" style="${teamStyle(t)}"><div class="lbl">SOLVE IT</div><div class="who">${esc(t ? t.name : '')}</div><div class="count" id="count"></div></div>`;
+    over = `<div class="d-solve" style="${teamStyle(t)}"><div class="lbl">SOLVE IT</div><div class="who">${esc(t ? t.name : '')}</div>${s.fin ? `<div class="lbl">FOR ${Number((s.wagers || {})[s.solver]) || 0}</div>` : ''}<div class="count" id="count"></div></div>`;
   } else if (s.phase === 'solved') {
     over = `<div class="d-banner answer">${esc(p.answer || '')}${s.result && s.result.kind === 'solved' ? `<small>${esc(fsResultText(s))}</small>` : ''}</div>`;
+  } else if (s.phase === 'wager') {
+    over = `<div class="d-banner">FINAL WAGER<small>BET ON YOUR PHONE · BUZZ IN ANY TIME · RIGHT WINS IT, WRONG LOSES IT</small></div>`;
   } else if (s.phase === 'buzz') {
-    over = `<div class="d-banner">Board's clear!<small>BUZZ IN ON YOUR PHONE TO SOLVE</small></div>`;
+    over = s.fin ? `<div class="d-banner">Board's clear!<small>BUZZ IN TO SOLVE: RIGHT WINS YOUR WAGER, WRONG LOSES IT</small></div>` : `<div class="d-banner">Board's clear!<small>BUZZ IN ON YOUR PHONE TO SOLVE</small></div>`;
   } else if (['match', 'miss', 'lost'].includes(s.phase) && fresh) {
-    over = `<div class="d-banner" style="animation-delay:.45s;opacity:0;animation-fill-mode:forwards">${esc(fsResultText(s))}${s.phase === 'match' ? `<small>SOLVE IT, OR PICK TWO MORE</small>` : s.phase === 'lost' ? '' : ''}</div>`;
+    over = `<div class="d-banner" style="animation-delay:.45s;opacity:0;animation-fill-mode:forwards">${esc(fsResultText(s))}${s.phase === 'match' ? `<small>${s.fin ? 'ANY TEAM CAN BUZZ IN TO SOLVE' : 'SOLVE IT, OR PICK TWO MORE'}</small>` : s.phase === 'lost' ? '' : ''}</div>`;
   }
   if (over !== lastOver || fresh) { $('over').innerHTML = over; lastOver = over; }
   if (s.phase === 'match' && fresh) setTimeout(() => { if (PP.state && PP.state.phase === 'match' && $('over')) { const b = $('over').querySelector('.d-banner'); if (b) b.style.transition = 'opacity .4s', b.style.opacity = '0'; } }, 3200);
@@ -113,8 +115,10 @@ function renderTeams(s) {
   const show = !['lobby', 'final'].includes(s.phase);
   const html = show ? s.teams.map(t => {
     const pot = fsPot(s, t.id), playing = ['pick', 'match', 'miss', 'lost', 'solve', 'buzz'].includes(s.phase);
-    return `<div class="d-team${s.turn === t.id && ['pick', 'match', 'miss', 'lost'].includes(s.phase) ? ' turn' : ''}${s.phase === 'buzz' && s.locked.includes(t.id) ? ' locked' : ''}" id="t${t.id}" style="${teamStyle(t)}">
-      <div class="nm">${esc(t.name)}</div><div class="sc"><span>${t.score}</span></div><div class="pot">${playing && pot ? `+${pot} ON THE LINE` : ''}</div></div>`;
+    const w = (s.wagers || {})[t.id], out = s.fin && s.locked.includes(t.id);
+    const line = s.phase === 'wager' ? (w != null ? 'WAGER IN ✓' : 'WAGERING…') : s.fin && playing ? (out ? `OUT · −${w || 0}` : `WAGER ${w || 0}`) : playing && pot ? `+${pot} ON THE LINE` : '';
+    return `<div class="d-team${s.turn === t.id && ['pick', 'match', 'miss', 'lost'].includes(s.phase) ? ' turn' : ''}${(s.phase === 'buzz' || s.fin) && s.locked.includes(t.id) && s.phase !== 'solved' ? ' locked' : ''}" id="t${t.id}" style="${teamStyle(t)}">
+      <div class="nm">${esc(t.name)}</div><div class="sc"><span>${t.score}</span></div><div class="pot">${line}</div></div>`;
   }).join('') : '';
   if (html !== lastTeams) { $('teams').innerHTML = html; lastTeams = html; }
   for (const t of s.teams) {
@@ -168,7 +172,7 @@ PP.on(s => {
   if (lastEv === null && s.ev) lastEv = s.ev.n;
   if (fresh) { lastEv = s.ev.n; if (evType) SFX.play(evType); }
   const p = fsPuzzle(s);
-  $('round').textContent = s.phase === 'lobby' || s.phase === 'final' || !p ? '' : `PUZZLE ${s.round}`;
+  $('round').textContent = s.phase === 'lobby' || s.phase === 'final' || !p ? '' : s.fin ? 'FINAL WAGER' : `PUZZLE ${s.round}`;
   const tt = s.teams.find(t => t.id === (s.phase === 'solve' ? s.solver : s.turn));
   $('turn').textContent = tt && ['pick', 'match', 'miss', 'lost'].includes(s.phase) ? `${tt.name}'s turn` : '';
   $('turn').style.cssText = tt ? teamStyle(tt) : '';

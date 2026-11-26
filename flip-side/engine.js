@@ -30,6 +30,7 @@ function createEngine(opts = {}) {
   // retired starters leave old saves; starter puzzles added in a later version show up in them
   S.puzzles = S.puzzles.filter(p => !retired(p.id));
   for (const p of STARTERS) if (!S.puzzles.some(q => q.id === p.id) && !(S.removed || []).includes(p.id)) S.puzzles.push({ ...p });
+  for (const p of S.puzzles) { const st = STARTERS.find(q => q.id === p.id); if (st && st.final && p.final === undefined) p.final = true; }
   S.undoLabel = null;
 
   const team = id => S.teams.find(t => t.id === Number(id));
@@ -39,8 +40,16 @@ function createEngine(opts = {}) {
   function nextTeam(id) {
     if (!S.teams.length) return null;
     const i = S.teams.findIndex(t => t.id === id);
+    for (let k = 1; k <= S.teams.length; k++) {
+      const t = S.teams[(i + k) % S.teams.length];
+      if (!S.fin || !S.locked.includes(t.id)) return t.id;
+    }
     return S.teams[(i + 1) % S.teams.length].id;
   }
+  // final-wager puzzles: each team bets up to its score (or up to 500 if it has less)
+  const maxWager = t => Math.max(t ? t.score : 0, 500);
+  const wagerOf = id => Math.max(0, Number((S.wagers || {})[id]) || 0);
+  const canBuzz = id => S.fin && team(id) && !S.locked.includes(Number(id)) && ['pick', 'match', 'miss', 'lost', 'buzz'].includes(S.phase);
   function deal() {
     const cards = [];
     POINTS.forEach(v => { cards.push({ kind: 'pts', v }, { kind: 'pts', v }); });
@@ -52,7 +61,7 @@ function createEngine(opts = {}) {
   const label = c => c.kind === 'pts' ? String(c.v) : c.kind === 'wild' ? 'WILD' : c.kind === 'take' ? 'TAKE' : 'LOSE A TURN';
 
   function nextUnused() {
-    const free = S.puzzles.map((p, i) => i).filter(i => !S.used.includes(S.puzzles[i].id) && i !== S.cur);
+    const free = S.puzzles.map((p, i) => i).filter(i => !S.used.includes(S.puzzles[i].id) && i !== S.cur && !S.puzzles[i].final);
     if (!free.length) return null;
     return S.shuffle !== false ? free[Math.floor(Math.random() * free.length)] : free[0];
   }
@@ -64,6 +73,8 @@ function createEngine(opts = {}) {
     S.answerEndsAt = null; S.hideAt = null;
     S.starter = S.starter == null || !team(S.starter) ? S.teams[0].id : nextTeam(S.starter);
     S.turn = S.starter; S.phase = 'pick';
+    S.fin = !!S.puzzles[i].final; S.wagers = {}; S.resume = null;
+    if (S.fin) { S.phase = 'wager'; S.turn = null; fire('theme'); return true; }
     fire(S.round === 1 ? 'theme' : 'start');
     return true;
   }
@@ -100,9 +111,10 @@ function createEngine(opts = {}) {
     if (!match) { S.phase = 'miss'; S.hideAt = now() + S.settings.peekSeconds * 1000; S.result = { kind: 'miss' }; fire('nomatch'); return true; }
     if (a.kind !== 'wild' && b.kind !== 'wild') S.wildTwin = null;
     S.board.forEach(c => { if (c.gone && c.by == null) c.by = me; });
+    if (S.fin) won.length = 0;
     S.pot[me] = (S.pot[me] || []).concat(won);
-    S.result = { kind: 'match', team: me, cards: [a, b].map(label), effect, points: won.reduce((x, c) => x + c.v, 0) };
-    if (effect === 'take') {   // steal the biggest card another team has matched this round
+    S.result = { kind: 'match', team: me, cards: [a, b].map(label), effect, points: won.reduce((x, c) => x + c.v, 0), fin: !!S.fin };
+    if (effect === 'take' && !S.fin) {   // steal the biggest card another team has matched this round
       let best = null;
       for (const t of S.teams) if (t.id !== me) (S.pot[t.id] || []).forEach((c, k) => { if (!best || c.v > best.c.v) best = { id: t.id, k, c }; });
       if (best) { S.pot[best.id].splice(best.k, 1); S.pot[me].push({ ...best.c, what: 'Taken' }); S.result.took = { from: best.id, v: best.c.v }; }
@@ -114,6 +126,13 @@ function createEngine(opts = {}) {
   }
   function solve(teamId) {
     const id = Number(teamId);
+    if (S.fin) {
+      if (!canBuzz(id)) return false;
+      S.resume = { phase: S.phase, turn: S.turn, flips: S.flips.slice() };
+      S.solver = id; S.phase = 'solve'; S.hideAt = null;
+      S.answerEndsAt = S.settings.answerSeconds > 0 ? now() + S.settings.answerSeconds * 1000 : null;
+      fire('buzz'); return true;
+    }
     if (S.phase === 'match' && id === S.turn) S.solver = id;
     else if (S.phase === 'buzz' && team(id) && !S.locked.includes(id)) { S.solver = id; fire('buzz'); }
     else return false;
@@ -128,16 +147,35 @@ function createEngine(opts = {}) {
     S.result = { kind: 'solved', team: id, points: pts, pot: potOf(id) };
   }
 
+  function finWrong() {   // final wager: lose the wager, sit out the rest of this puzzle, and play carries on
+    const id = S.solver, t = team(id), w = wagerOf(id);
+    if (t) t.score -= w;
+    if (!S.locked.includes(id)) S.locked.push(id);
+    S.solver = null; S.answerEndsAt = null; S.result = { kind: 'wrong', team: id, penalty: w, fin: true }; fire('wrong');
+    if (S.teams.every(x => S.locked.includes(x.id))) {   // everyone has guessed wrong: show the answer
+      S.board.forEach(c => { c.gone = true; }); S.phase = 'solved'; S.flips = []; S.resume = null; S.result = { kind: 'revealed', fin: true }; return;
+    }
+    const r = S.resume || { phase: 'pick', turn: S.turn, flips: [] }; S.resume = null;
+    S.turn = r.turn; S.flips = r.flips || [];
+    if (!left()) { S.phase = 'buzz'; S.turn = null; S.flips = []; return; }
+    if (r.phase === 'miss' || r.phase === 'lost') { S.phase = r.phase; S.hideAt = now() + S.settings.peekSeconds * 1000; return; }
+    if (S.locked.includes(S.turn)) { endTurn(); return; }   // the team whose turn it was is out: the next team picks
+    S.phase = r.phase === 'match' ? 'match' : 'pick';
+    if (S.phase === 'pick' && S.flips.length >= 2) S.flips = [];
+  }
+
   const actions = {
     flip({ n }) { flip(Number(n)); },
     again() { if (S.phase === 'match' && left()) { S.phase = 'pick'; S.flips = []; } },
     solve({ teamId }) { solve(teamId == null ? (S.phase === 'match' ? S.turn : null) : teamId); },
     correct() {
       if (S.phase !== 'solve') return;
-      bank(S.solver); S.pot = {}; S.phase = 'solved'; S.answerEndsAt = null; S.board.forEach(c => { c.gone = true; }); fire('correct');
+      if (S.fin) { const t = team(S.solver), w = wagerOf(S.solver); if (t) t.score += w; S.result = { kind: 'solved', team: S.solver, points: w, fin: true }; }
+      else bank(S.solver); S.pot = {}; S.phase = 'solved'; S.answerEndsAt = null; S.board.forEach(c => { c.gone = true; }); fire('correct');
     },
     wrong() {
       if (S.phase !== 'solve') return;
+      if (S.fin) return finWrong();
       const id = S.solver, t = team(id), pen = Math.max(0, Number(S.settings.wrongPenalty) || 0); if (t) t.score -= pen;
       S.solver = null; S.answerEndsAt = null; S.result = { kind: 'wrong', team: id, penalty: pen }; fire('wrong');
       if (!left()) { if (!S.locked.includes(id)) S.locked.push(id); S.phase = S.locked.length >= S.teams.length ? 'buzz' : 'buzz'; S.turn = null; return; }
@@ -151,6 +189,17 @@ function createEngine(opts = {}) {
       S.board.forEach(c => { c.gone = true; }); S.phase = 'solved'; S.flips = []; S.pot = {}; S.answerEndsAt = null; S.result = { kind: 'revealed' }; fire('reveal');
     },
     next() { startRound(nextUnused()); },
+    finalPuzzle() {   // play the final-wager puzzle (one that hasn't been played yet, if there is one)
+      const list = S.puzzles.map((p, i) => i).filter(i => S.puzzles[i].final);
+      const i = list.find(i => !S.used.includes(S.puzzles[i].id)) ?? list[0];
+      if (i != null) { S.used = S.used.filter(id => id !== S.puzzles[i].id); startRound(i); }
+    },
+    wager({ teamId, amount }) {
+      const t = team(teamId); if (!t || S.phase !== 'wager') return;
+      S.wagers = { ...(S.wagers || {}), [t.id]: Math.min(maxWager(t), Math.max(0, Math.round(Number(amount) || 0))) };
+    },
+    startBoard() { if (S.phase === 'wager') { S.phase = 'pick'; S.turn = S.starter; fire('start'); } },
+    setFinal({ id, on }) { const p = S.puzzles.find(q => q.id === id); if (p) p.final = on === true || on === 'true'; },
     load({ index }) { const i = Number(index); if (S.puzzles[i]) { S.used = S.used.filter(id => id !== S.puzzles[i].id); startRound(i); } },
     lobby() { S.phase = 'lobby'; S.flips = []; S.answerEndsAt = null; },
     final() { S.phase = 'final'; S.flips = []; S.answerEndsAt = null; fire('winner'); },
@@ -199,7 +248,7 @@ function createEngine(opts = {}) {
   // ---------- undo ----------
   const UNDO_LABELS = { flip: 'Flip card', again: 'Pick again', solve: 'Solve', correct: 'Correct', wrong: 'Wrong', hide: 'Turn cards back',
     pass: 'Pass turn', setTurn: 'Change turn', reveal: 'Reveal puzzle', next: 'Next puzzle', load: 'Pick puzzle', lobby: 'Join screen',
-    final: 'Final standings', score: 'Score change', removeTeam: 'Remove team', defaultTeams: 'Default teams', removePuzzle: 'Delete puzzle', buzz: 'Buzz-in' };
+    final: 'Final standings', finalPuzzle: 'Final wager puzzle', startBoard: 'Start the board', wager: 'Wager', score: 'Score change', removeTeam: 'Remove team', defaultTeams: 'Default teams', removePuzzle: 'Delete puzzle', buzz: 'Buzz-in' };
   function record(type) {
     if (!UNDO_LABELS[type]) return false;
     const c = JSON.parse(JSON.stringify(S));
@@ -239,7 +288,9 @@ function createEngine(opts = {}) {
     tick() { if ((S.phase === 'miss' || S.phase === 'lost') && S.hideAt && now() >= S.hideAt) { endTurn(); changed(); } },
     // requests from phones
     phoneFlip(teamId, n) { if (S.phase !== 'pick' || Number(teamId) !== S.turn) return false; record('flip'); const ok = flip(Number(n)); if (ok) changed(); else history.pop(); return ok; },
-    phoneSolve(teamId) { record(S.phase === 'buzz' ? 'buzz' : 'solve'); const ok = solve(teamId); if (ok) changed(); else history.pop(); return ok; },
+    phoneWager(teamId, amount) { if (S.phase !== 'wager' || !team(teamId)) return false; actions.wager({ teamId, amount }); changed(); return true; },
+    maxWager: id => maxWager(team(id)),
+    phoneSolve(teamId) { record(S.phase === 'buzz' || S.fin ? 'buzz' : 'solve'); const ok = solve(teamId); if (ok) changed(); else history.pop(); return ok; },
     phoneAgain(teamId) { if (Number(teamId) !== S.turn || S.phase !== 'match') return false; record('again'); actions.again(); changed(); return true; },
     color(teamId, color) {
       const t = team(teamId);

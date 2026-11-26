@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Flip Side · Host script</title>
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body class="stage-page">
 <div class="s-wrap">
@@ -15,7 +15,7 @@
   <div class="s-scores" id="scores"></div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="net.js?v=5"></script>
+<script src="net.js?v=6"></script>
 <script>
 const $ = id => document.getElementById(id);
 if (PP.needRoom('HOST SCRIPT', true)) throw new Error('waiting for room code');
@@ -46,7 +46,17 @@ function render(s) {
     case 'solve': say = [`${n(s.solver)}, what's the answer?`]; break;
     case 'buzz': say = ['The board is clear!', 'Buzz in on your phone if you know it!']; break;
     case 'solved': say = r.kind === 'solved' ? ['That\'s right!', `It's "${esc(p ? p.answer : '')}". ${n(r.team)} banks ${r.points} points!`] : [`The answer was "${esc(p ? p.answer : '')}".`]; break;
+    case 'wager': say = ["It's the final wager puzzle!", 'Everyone, bet up to your score on your phone, or up to 500 if you have less.', "Then we play the board, but you can buzz in to solve at any time. Get it right and you win your wager. Get it wrong and you lose it, and you're out of this puzzle."]; break;
     case 'final': { const top = fsRanking(s)[0]; say = ['And the winner is…', top ? `${esc(top.team.name)} with ${top.team.score} points!` : '']; break; }
+  }
+  if (s.fin) {   // final wager: no card points, anyone can buzz, the solver wins (or loses) the wager
+    const w = id => Number((s.wagers || {})[id]) || 0;
+    if (s.phase === 'match') say = ["It's a match!", 'Anyone can buzz in to solve!'];
+    if (['pick', 'miss', 'lost'].includes(s.phase)) say.push('Remember, you can buzz in any time.');
+    if (s.phase === 'solve') say = [`${n(s.solver)}, for ${w(s.solver)} points, what's the answer?`];
+    if (s.phase === 'buzz') say = ['The board is clear!', 'Buzz in if you know it, for your wager.'];
+    if (s.phase === 'solved' && r.kind === 'solved') say = ["That's right!", `It's "${esc(p ? p.answer : '')}". ${n(r.team)} wins ${r.points} points!`];
+    if (r.kind === 'wrong' && ['pick', 'match', 'miss', 'lost', 'buzz'].includes(s.phase) && s.ev && s.ev.type === 'wrong') say = [`Sorry, ${n(r.team)}, that's not it. You lose ${r.penalty}.`, 'Play on!'];
   }
   $('say').innerHTML = say.map(x => `<p>${x}</p>`).join('');
   const who = s.teams.find(t => t.id === s.solver);
