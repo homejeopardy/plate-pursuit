@@ -3,11 +3,28 @@ from PIL import Image, ImageDraw, ImageFont
 
 OUT = sys.argv[1]
 os.makedirs(OUT, exist_ok=True)
-S = 144
+S = 144          # layout units; everything below is drawn in a 144-unit square
+OUT_PX = 512     # size of the saved PNGs
+K = 16           # drawn at 144*16 = 2304 px, then shrunk to OUT_PX so every edge is smooth
+
+class SD:   # an ImageDraw that takes 144-unit coordinates and draws K times bigger
+    def __init__(self, d): self.d = d
+    def _p(self, pts): return [(x * K, y * K) for x, y in pts]
+    def _b(self, b): return [v * K for v in b]
+    def _kw(self, kw):
+        if 'width' in kw: kw['width'] = max(1, round(kw['width'] * K))
+        return kw
+    def rounded_rectangle(self, b, r, **kw): self.d.rounded_rectangle(self._b(b), r * K, **self._kw(kw))
+    def ellipse(self, b, **kw): self.d.ellipse(self._b(b), **self._kw(kw))
+    def line(self, pts, **kw): self.d.line(self._p(pts), **self._kw(kw))
+    def polygon(self, pts, **kw): self.d.polygon(self._p(pts), **self._kw(kw))
+    def text(self, xy, t, **kw): self.d.text((xy[0] * K, xy[1] * K), t, **kw)
+    def textlength(self, t, font): return self.d.textlength(t, font=font) / K
+    def textbbox(self, xy, t, **kw): return [v / K for v in self.d.textbbox((xy[0] * K, xy[1] * K), t, **kw)]
 RW = '/System/Library/Fonts/Supplemental/Rockwell.ttc'
 FELT, FELT_D, RAIL, CREAM, RED, RED_D, GOLD, INK, GOOD, BAD = '#1d5a3c', '#123d28', '#5a3519', '#f7f1e1', '#a8222c', '#7d1820', '#e9b52f', '#1d1a16', '#1f7a46', '#b3202a'
 
-def font(sz): return ImageFont.truetype(RW, sz, index=2)
+def font(sz): return ImageFont.truetype(RW, round(sz * K), index=2)
 
 def fit(d, lines, maxw, start):
     sz = start
@@ -18,12 +35,12 @@ def fit(d, lines, maxw, start):
     return font(sz), sz
 
 def base(bg, border=None):
-    im = Image.new('RGB', (S, S), bg)
-    d = ImageDraw.Draw(im)
+    im = Image.new('RGB', (S * K, S * K), bg)
+    d = SD(ImageDraw.Draw(im))
     if border: d.rounded_rectangle([5, 5, S - 6, S - 6], 14, outline=border, width=4)
     return im, d
 
-def text(d, lines, color, top=None, maxw=118, start=40, cy=S / 2):
+def text(d, lines, color, top=None, maxw=104, start=40, cy=S / 2):
     f, sz = fit(d, lines, maxw, start)
     lh = sz * 1.08
     y0 = (cy if top is None else top) - lh * len(lines) / 2 if top is None else top
@@ -34,13 +51,13 @@ def small(d, t, color, y):
     f = font(17)
     d.text((S / 2, y), t, font=f, fill=color, anchor='mm')
 
-def save(im, name): im.save(os.path.join(OUT, name + '.png'))
+def save(im, name): im.resize((OUT_PX, OUT_PX), Image.LANCZOS).save(os.path.join(OUT, name + '.png'), optimize=True)
 
 def control(name, lines, bg, fg, border=None, sub=None):
     im, d = base(bg, border)
     if sub:
         small(d, sub, fg, 26)
-        text(d, lines, fg, cy=S / 2 + 10, maxw=116)
+        text(d, lines, fg, cy=S / 2 + 10, maxw=104)
     else:
         text(d, lines, fg)
     save(im, name)
