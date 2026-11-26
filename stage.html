@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#262626">
 <title>Plate Pursuit · Host script</title>
-<link rel="stylesheet" href="style.css?v=31">
+<link rel="stylesheet" href="style.css?v=32">
 </head>
 <body class="crew-page">
 <div class="crew-wrap" id="app">
@@ -18,10 +18,10 @@
   <div class="cr-scores" id="scores"></div>
   <div class="cr-conn" id="conn"></div>
 </div>
-<script src="mode.js?v=31"></script>
+<script src="mode.js?v=32"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="states.js?v=31"></script>
-<script src="shared.js?v=31"></script>
+<script src="states.js?v=32"></script>
+<script src="shared.js?v=32"></script>
 <script>
 const $ = id => document.getElementById(id);
 if (PP.needRoom('HOST SCRIPT')) throw new Error('waiting for room code');
@@ -78,6 +78,13 @@ function script(s) {
       }
       return [`The answer was…`].concat(breakdown().filter(l => !l.startsWith("Let's")));
     }
+    case 'awards': {
+      const a = s.awards;
+      if (!a.shown) return [`Before the final standings, let's hand out some <b>awards</b>!`, `There are ${a.list.length} of them.`];
+      const w = a.list[a.shown - 1];
+      return [`The award for <b>${esc(w.title)}</b> goes to…`, `${tn(s, w.teamId)}!`, `They got ${esc(w.detail)}.`,
+        a.shown < a.list.length ? `Next award…` : `And now, the final standings!`];
+    }
     case 'final': {
       const r = ppRanking(s), top = r.filter(x => x.rank === 1);
       if (!top.length) return [`That's the game!`];
@@ -93,11 +100,11 @@ function render(s) {
   $('conn').textContent = PP.status || (PP.connected ? '' : 'Connecting…');
   if (!s) return;
   const p = s.puzzles[s.cur] || null, pcs = piecesOf(p);
-  const key = JSON.stringify([s.phase, s.cur, s.buzzed, s.result, s.step, s.locked, s.fin, s.teams, s.tb, s.speed && s.speed.count]);
+  const key = JSON.stringify([s.phase, s.cur, s.buzzed, s.result, s.step, s.locked, s.fin, s.teams, s.tb, s.speed && s.speed.count, s.awards && s.awards.shown]);
   if (key !== lastKey) {
     lastKey = key;
     $('say').innerHTML = script(s).map(l => `<p>${l}</p>`).join('');
-    const showPlate = p && !['lobby', 'final', 'speedready'].includes(s.phase);
+    const showPlate = p && !['lobby', 'final', 'awards', 'speedready'].includes(s.phase);
     $('plate').innerHTML = showPlate ? puzzlePlate(p, { parts: p.parts }) : '';
     $('ans').innerHTML = showPlate ? `<b>${esc(p.answer)}</b>${p.hint ? `<div class="cr-hint">Clue: ${esc(p.hint)}</div>` : ''}` : '';
     const revealing = ['revealed', 'fjudge'].includes(s.phase);
@@ -105,7 +112,7 @@ function render(s) {
       <span class="pc c${pc.color}">${esc(pc.plate)}</span> = <span class="pc c${pc.color}">${esc(pc.means)}</span></li>`).join('') : '';
     $('scores').innerHTML = s.teams.map(t => `<div class="sign green d-team ${s.phase === 'buzzed' && s.buzzed === t.id ? 'buzzed' : ''}" style="${teamStyle(t)}"><div class="n">${esc(t.name)}</div><div class="s">${ppShownScore(s, t)}</div></div>`).join('');
     const names = { lobby: 'Join screen', ready: 'Buzz-in', running: 'Buzz-in', buzzed: 'Buzz-in', paused: 'Buzz-in', revealed: 'Buzz-in',
-      speedready: 'Speed round', speed: 'Speed round', speedover: 'Speed round', fwager: 'Final plate', fanswer: 'Final plate', fjudge: 'Final plate', final: 'Game over' };
+      speedready: 'Speed round', speed: 'Speed round', speedover: 'Speed round', fwager: 'Final plate', fanswer: 'Final plate', fjudge: 'Final plate', awards: 'Awards', final: 'Game over' };
     $('meta').textContent = (s.tb && !['final', 'lobby'].includes(s.phase) ? 'Tie-breaker' : names[s.phase] || '') + (p && ['ready', 'running', 'buzzed', 'paused', 'revealed'].includes(s.phase) && !s.tb ? ` · plate ${s.used.length + (s.phase === 'revealed' ? 0 : 1)} of ${s.puzzles.length}` : '');
   }
   tick();

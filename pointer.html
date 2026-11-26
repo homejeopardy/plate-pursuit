@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <meta name="theme-color" content="#262626">
 <title>Plate Pursuit · Pointer</title>
-<link rel="stylesheet" href="style.css?v=31">
+<link rel="stylesheet" href="style.css?v=32">
 </head>
 <body class="crew-page">
 <div class="pt-wrap" id="app">
@@ -15,10 +15,10 @@
   <ol class="cr-pieces pt-list" id="pieces"></ol>
   <div class="cr-conn" id="conn"></div>
 </div>
-<script src="mode.js?v=31"></script>
+<script src="mode.js?v=32"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="states.js?v=31"></script>
-<script src="shared.js?v=31"></script>
+<script src="states.js?v=32"></script>
+<script src="shared.js?v=32"></script>
 <script>
 const $ = id => document.getElementById(id);
 if (PP.needRoom('POINTER')) throw new Error('waiting for room code');
@@ -34,6 +34,8 @@ function card(s) {
   switch (s.phase) {
     case 'lobby': return msg('Waiting for the first plate.', 'This screen will tell you what each piece of the plate means, one at a time, as the answer is revealed.');
     case 'final': return msg('Game over.', 'Point at the winner!');
+    case 'awards': { const a = s.awards, w = a.shown && a.list[a.shown - 1];
+      return w ? msg(`${esc(w.title)}: <b>${esc(teamName(s, w.teamId))}</b>`, 'Point at that team!') : msg('Awards time!', 'Point at each team as it wins an award.'); }
     case 'speedready': return msg('Speed round coming up.');
     case 'speed': return p ? `<div class="pt-label">Answer</div><div class="pt-means">${esc(p.answer)}</div>` : '';
     case 'speedover': return msg('Speed round over.');
@@ -54,12 +56,12 @@ let lastKey = '';
 function render(s) {
   $('conn').textContent = PP.status || (PP.connected ? '' : 'Connecting…');
   if (!s) return;
-  const key = JSON.stringify([s.phase, s.cur, s.step, s.fin && s.fin.shown, s.puzzles[s.cur]]);
+  const key = JSON.stringify([s.phase, s.cur, s.step, s.fin && s.fin.shown, s.puzzles[s.cur], s.awards && s.awards.shown]);
   if (key === lastKey) return;
   lastKey = key;
   const p = s.puzzles[s.cur] || null, pcs = piecesOf(p);
   const revealing = ['revealed', 'fjudge'].includes(s.phase) && !(s.phase === 'fjudge' && s.fin && s.fin.shown < s.fin.order.length);
-  const showPlate = p && !['lobby', 'final', 'speedready', 'fwager'].includes(s.phase);
+  const showPlate = p && !['lobby', 'final', 'awards', 'speedready', 'fwager'].includes(s.phase);
   $('plate').innerHTML = showPlate ? puzzlePlate(p, { parts: p.parts, step: revealing ? s.step : 0 }) : '';
   $('card').innerHTML = card(s);
   $('pieces').innerHTML = showPlate && pcs.length > 1 && !s.phase.startsWith('speed') ? pcs.map((pc, i) => `<li class="${revealing && i < s.step ? 'done' : ''} ${(revealing ? s.step : 0) === i ? 'next' : ''}">

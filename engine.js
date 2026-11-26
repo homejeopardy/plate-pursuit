@@ -156,12 +156,17 @@ function createEngine(opts = {}) {
       buzzed: null, locked: [], valueAtBuzz: 0, result: null,
       speed: null, settings: { ...DEFAULT_SETTINGS }, ev: { n: 0, type: null },
       fin: null, tb: null, tbWinner: null, undoLabel: null, step: 0,
+      stats: newStats(), awards: null, awardsDone: false,
     };
   }
   
+  // what the end-of-game awards are worked out from
+  function newStats() { return { fast: null, run: {}, streak: null, big: null, worst: {}, speed: null }; }
+
   let S = freshState();
   try { const saved = opts.load && opts.load(); if (saved) S = { ...S, ...saved, settings: { ...DEFAULT_SETTINGS, ...(saved.settings || {}) } }; } catch (e) {}
   S.runningSince = null; S.undoLabel = null;
+  if (!S.stats) S.stats = newStats();   // games saved before the awards
   if (S.phase === 'fanswer' && S.fin) S.fin.endsAt = Date.now() + 10000;   // reloaded mid-answer: give 10 more seconds
   if (S.phase === 'running') S.phase = 'ready';
   if (S.phase === 'speed') S.phase = 'speedover';
@@ -331,7 +336,9 @@ function createEngine(opts = {}) {
   function endSpeed() {
     clearTimeout(speedTimer); speedTimer = null;
     if (S.phase !== 'speed') return;
-    S.phase = 'speedover'; fire('timeup'); changed();
+    S.phase = 'speedover'; fire('timeup');
+    if (S.speed && (!S.stats.speed || S.speed.count > S.stats.speed.count)) S.stats.speed = { teamId: S.speed.teamId, count: S.speed.count };
+    noteRanks(); changed();
   }
   
   // The buzzing team gets answerSeconds to answer; running out counts as wrong.
@@ -349,7 +356,7 @@ function createEngine(opts = {}) {
     speedStart: 'Start speed round', speedStop: 'Stop speed round', final: 'Final standings', lobby: 'Join screen',
     score: 'Score change', defaultTeams: 'Default teams', toggleDouble: 'Double points', removeTeam: 'Remove team', finalStart: 'Final wager plate', finalShow: 'Show final plate',
     finalLock: 'Lock answers', finalMark: 'Mark final answer', tiebreak: 'Tie-breaker plate',
-    step: 'Reveal piece', stepAll: 'Whole answer', finalNext: 'Show team answer' };
+    step: 'Reveal piece', stepAll: 'Whole answer', finalNext: 'Show team answer', awardNext: 'Show award' };
   function record(type) {
     if (!UNDO_LABELS[type]) return false;
     const c = JSON.parse(JSON.stringify(S));
@@ -394,6 +401,39 @@ function createEngine(opts = {}) {
     return tied.length > 1 && !tied.includes(S.tbWinner) ? tied : [];
   }
 
+  // ---------- award stats ----------
+  function rankOf(id) { const t = team(id); return t ? 1 + S.teams.filter(o => o.score > t.score).length : 0; }
+  function noteRanks() {   // lowest place each team has been in, once a few plates are in
+    if (S.used.length < 3 || S.teams.length < 3) return;
+    for (const t of S.teams) S.stats.worst[t.id] = Math.max(S.stats.worst[t.id] || 0, rankOf(t.id));
+  }
+  function noteCorrect(id, points) {
+    const st = S.stats, secs = Math.round(S.elapsed * 10) / 10, plate = (S.puzzles[S.cur] || {}).plate;
+    if (!st.fast || secs < st.fast.secs) st.fast = { teamId: id, secs, plate };
+    if (!st.big || points > st.big.points) st.big = { teamId: id, points, plate };
+    for (const t of S.teams) st.run[t.id] = t.id === id ? (st.run[t.id] || 0) + 1 : 0;
+    if (!st.streak || st.run[id] > st.streak.n) st.streak = { teamId: id, n: st.run[id] };
+    noteRanks();
+  }
+  function buildAwards() {
+    const st = S.stats || newStats(), A = [], here = id => !!team(id);
+    if (st.fast && here(st.fast.teamId)) A.push({ key: 'fast', title: 'Fastest buzz', teamId: st.fast.teamId, detail: `${st.fast.plate} in ${st.fast.secs.toFixed(1)} seconds` });
+    if (st.streak && st.streak.n >= 2 && here(st.streak.teamId)) A.push({ key: 'streak', title: 'Hot streak', teamId: st.streak.teamId, detail: `${st.streak.n} right in a row` });
+    if (st.big && here(st.big.teamId)) A.push({ key: 'big', title: 'Biggest plate', teamId: st.big.teamId, detail: `${st.big.points} points on ${st.big.plate}` });
+    if (st.speed && st.speed.count > 0 && here(st.speed.teamId)) A.push({ key: 'speed', title: 'Speed demon', teamId: st.speed.teamId, detail: `${st.speed.count} plate${st.speed.count > 1 ? 's' : ''} in the speed round` });
+    if (S.fin) {
+      const bets = Object.entries(S.fin.wagers).map(([id, w]) => ({ id: Number(id), w })).filter(b => b.w > 0 && here(b.id)).sort((a, b) => b.w - a.w);
+      if (bets.length) A.push({ key: 'bet', title: 'High roller', teamId: bets[0].id, detail: `bet ${bets[0].w} on the final plate` });
+    }
+    let best = null;
+    for (const t of S.teams) {
+      const from = st.worst[t.id] || 0, to = rankOf(t.id);
+      if (from - to >= 1 && (!best || from - to > best.from - best.to || (from - to === best.from - best.to && to < best.to))) best = { id: t.id, from, to };
+    }
+    if (best) A.push({ key: 'comeback', title: 'Best comeback', teamId: best.id, detail: `from #${best.from} up to #${best.to}` });
+    return A;
+  }
+
   function buzz(teamId) {
     if (S.phase !== 'running' || !team(teamId) || S.locked.includes(teamId)) return false;
     S.valueAtBuzz = liveValue(); freeze();
@@ -404,8 +444,12 @@ function createEngine(opts = {}) {
   }
   
   const actions = {
-    next() { S.tb = null; loadPlate(nextUnused(S.cur)); },
-    load({ index }) { S.tb = null; loadPlate(Number(index)); },
+    next() {
+      if (S.phase === 'awards') return actions.awardNext();
+      const first = S.phase === 'lobby' && !S.used.length;
+      S.tb = null; loadPlate(nextUnused(S.cur)); if (first) fire('theme');
+    },
+    load({ index }) { const first = S.phase === 'lobby' && !S.used.length; S.tb = null; loadPlate(Number(index)); if (first) fire('theme'); },
     start() { if (S.phase === 'ready') { S.phase = 'running'; S.runningSince = now(); fire('start'); } },
     buzz({ teamId }) { buzz(Number(teamId)); },
     correct() {
@@ -415,6 +459,7 @@ function createEngine(opts = {}) {
       } else if (S.phase === 'buzzed') {
         const t = team(S.buzzed); if (t) t.score += S.valueAtBuzz;
         S.result = { teamId: S.buzzed, points: S.valueAtBuzz };
+        noteCorrect(S.buzzed, S.valueAtBuzz);
         markUsed(S.cur); S.phase = 'revealed'; fire('correct');
       } else if (S.phase === 'speed') {
         const t = team(S.speed.teamId); if (t) t.score += S.settings.speedPoints;
@@ -424,6 +469,7 @@ function createEngine(opts = {}) {
     },
     wrong() {
       if (S.phase !== 'buzzed') return;
+      if (!S.tb) S.stats.run[S.buzzed] = 0;   // a wrong answer ends the streak
       S.locked.push(S.buzzed); S.buzzed = null;
       if (S.teams.every(t => S.locked.includes(t.id))) { markUsed(S.cur); S.phase = 'revealed'; S.result = null; }   // (tie-breaker: other teams start locked)
       else S.phase = 'paused';      // buzzers stay closed until the host reopens them
@@ -450,7 +496,20 @@ function createEngine(opts = {}) {
       clearTimeout(speedTimer); speedTimer = setTimeout(endSpeed, S.settings.speedSeconds * 1000);
     },
     speedStop() { endSpeed(); },
-    final() { freeze(); clearTimeout(finTimer); S.tb = null; S.buzzed = null; S.phase = 'final'; fire('winner'); },
+    final() {
+      freeze(); clearTimeout(finTimer); S.tb = null; S.buzzed = null;
+      // the first time the game ends, the awards come first (pressing Final standings again during them skips ahead)
+      if (!S.awardsDone && S.phase !== 'awards') {
+        const list = buildAwards();
+        if (list.length) { S.awards = { list, shown: 0 }; S.phase = 'awards'; fire('drumroll'); return; }
+      }
+      S.awardsDone = true; S.phase = 'final'; fire('winner');
+    },
+    awardNext() {
+      if (S.phase !== 'awards') return;
+      if (S.awards.shown < S.awards.list.length) { S.awards.shown++; fire('award'); } else actions.final();
+    },
+    theme() { fire('theme'); },
     // ---- final wager plate: everyone bets, everyone types an answer, the host marks each one
     finalStart() {
       const i = nextUnused(S.cur); if (i == null) return;
@@ -470,15 +529,15 @@ function createEngine(opts = {}) {
       // teams' answers are shown one at a time, lowest score first
       S.fin.order = [...S.teams].sort((a, b) => (S.fin.base[a.id] ?? a.score) - (S.fin.base[b.id] ?? b.score)).map(t => t.id); S.fin.shown = 0;
     },
-    finalNext() { if (S.phase === 'fjudge' && S.fin.shown < S.fin.order.length) { S.fin.shown++; fire('buzz'); } },
+    finalNext() { if (S.phase === 'fjudge' && S.fin.shown < S.fin.order.length) { S.fin.shown++; fire('show'); } },
     // reveal the answer one piece of the plate at a time
-    step() { if (['revealed', 'fjudge'].includes(S.phase) && S.step < pieceCount(S.puzzles[S.cur])) S.step++; },
-    stepAll() { if (['revealed', 'fjudge'].includes(S.phase)) S.step = pieceCount(S.puzzles[S.cur]); },
+    step() { if (['revealed', 'fjudge'].includes(S.phase) && S.step < pieceCount(S.puzzles[S.cur])) { S.step++; fire('piece'); } },
+    stepAll() { if (['revealed', 'fjudge'].includes(S.phase) && S.step < pieceCount(S.puzzles[S.cur])) { S.step = pieceCount(S.puzzles[S.cur]); fire('piece'); } },
     finalMark({ teamId, right }) {
       if (S.phase !== 'fjudge' && S.phase !== 'fanswer') return;   // can be marked as soon as an answer comes in
       const id = Number(teamId), r = right === true || right === 'true';
       if (S.fin.marks[id] === r) delete S.fin.marks[id]; else S.fin.marks[id] = r;   // tap again to unmark
-      finalScore(id); fire(r ? 'correct' : 'wrong');
+      finalScore(id); noteRanks(); fire(r ? 'correct' : 'wrong');
     },
     // ---- tie-breaker: only the teams tied for first can buzz
     tiebreak() {
@@ -489,8 +548,8 @@ function createEngine(opts = {}) {
       loadPlate(i); S.tb = { teams: tied }; S.tbWinner = null;
       S.locked = S.teams.filter(t => !tied.includes(t.id)).map(t => t.id);
     },
-    lobby() { freeze(); S.phase = 'lobby'; },
-    score({ teamId, delta }) { const t = team(Number(teamId)); if (t) t.score += Number(delta) || 0; },
+    lobby() { freeze(); S.phase = 'lobby'; S.awards = null; },
+    score({ teamId, delta }) { const t = team(Number(teamId)); if (t) t.score += Number(delta) || 0; noteRanks(); },
     rename({ teamId, name }) { const t = team(Number(teamId)); if (t && String(name).trim()) t.name = String(name).trim().slice(0, 24); },
     addTeam({ name }) { addTeam(name); },
     defaultTeams() { S.teams = defaultTeams(S.nextTeamId); S.nextTeamId += DEFAULT_TEAMS.length; },

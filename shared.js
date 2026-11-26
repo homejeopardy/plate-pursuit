@@ -438,37 +438,109 @@ new MutationObserver(() => {
 }).observe(document.documentElement, { childList: true, subtree: true });
 if (document.fonts) document.fonts.ready.then(fitPlates);
 
-// ---- generated sound effects (no audio files) ----
+// ---- generated sound effects (no audio files): everything is synthesised in the browser ----
 const SFX = (() => {
-  let ctx = null;
+  let ctx = null, out = null, noiseBuf = null;
   const unlock = () => {
-    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!ctx) {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const comp = ctx.createDynamicsCompressor(), vol = ctx.createGain();
+      vol.gain.value = 0.9; comp.connect(vol).connect(ctx.destination); out = comp;
+      noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+      const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
     if (ctx.state === 'suspended') ctx.resume();
   };
-  function tone(freq, start, dur, type = 'sine', vol = 0.25, endFreq) {
-    if (!ctx) return;
-    const t0 = ctx.currentTime + start;
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = type; o.frequency.setValueAtTime(freq, t0);
-    if (endFreq) o.frequency.exponentialRampToValueAtTime(endFreq, t0 + dur);
+  const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+  const filt = (type, freq, q = 0.8) => { const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; return f; };
+  // one note: f = pitch, t = start (s from now), d = length, hold = keep full volume until near the end (horns, brass)
+  function note({ f, t = 0, d = 0.3, type = 'sine', v = 0.2, to, lp, vib, a = 0.012, hold = false }) {
+    const t0 = ctx.currentTime + t, o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t0);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, t0 + d);
+    if (vib) { const l = ctx.createOscillator(), lg = ctx.createGain(); l.frequency.value = vib[0]; lg.gain.value = vib[1]; l.connect(lg).connect(o.frequency); l.start(t0); l.stop(t0 + d + 0.1); }
+    let n = o; if (lp) { const fl = filt('lowpass', lp); o.connect(fl); n = fl; }
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(v, t0 + a);
+    if (hold) g.gain.setValueAtTime(v, t0 + Math.max(a, d - 0.07));
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+    n.connect(g).connect(out); o.start(t0); o.stop(t0 + d + 0.05);
+  }
+  // noise: hp / lp / bp filters, sweep = band-pass glide, trem = drum-roll flutter, swell = fade in rather than out
+  function noise({ t = 0, d = 0.1, v = 0.2, hp, lp, bp, sweep, trem, swell }) {
+    const t0 = ctx.currentTime + t, src = ctx.createBufferSource(), g = ctx.createGain();
+    src.buffer = noiseBuf; src.loop = true;
+    let n = src;
+    if (hp) { const f = filt('highpass', hp); n.connect(f); n = f; }
+    if (lp) { const f = filt('lowpass', lp); n.connect(f); n = f; }
+    if (bp || sweep) { const f = filt('bandpass', bp || sweep[0], 1.4); if (sweep) f.frequency.exponentialRampToValueAtTime(sweep[1], t0 + d); n.connect(f); n = f; }
+    if (trem) {
+      const tg = ctx.createGain(), l = ctx.createOscillator(), lg = ctx.createGain();
+      tg.gain.value = 0.5; l.type = 'square'; l.frequency.value = trem; lg.gain.value = 0.5;
+      l.connect(lg).connect(tg.gain); l.start(t0); l.stop(t0 + d + 0.1); n.connect(tg); n = tg;
+    }
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(vol, t0 + 0.015);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    o.connect(g).connect(ctx.destination); o.start(t0); o.stop(t0 + dur + 0.05);
+    if (swell) { g.gain.exponentialRampToValueAtTime(v * 0.25, t0 + 0.05); g.gain.exponentialRampToValueAtTime(v, t0 + d - 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d); }
+    else { g.gain.exponentialRampToValueAtTime(v, t0 + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d); }
+    n.connect(g).connect(out); src.start(t0, Math.random()); src.stop(t0 + d + 0.05);
+  }
+  const crash = (t, v = 0.22) => { noise({ t, d: 1.6, v, hp: 5000 }); noise({ t, d: 0.5, v: v * 0.6, bp: 3000 }); };
+  const kick = t => note({ f: 130, to: 45, t, d: 0.16, v: 0.55, a: 0.003 });
+  const snare = (t, v = 0.2) => { noise({ t, d: 0.13, v, bp: 1900 }); note({ f: 210, to: 160, t, d: 0.08, v: v * 0.6, type: 'triangle', a: 0.002 }); };
+  const hat = (t, v = 0.07) => noise({ t, d: 0.035, v, hp: 7500 });
+  const brass = (m, t, d, v = 0.1) => { note({ f: mtof(m), t, d, type: 'sawtooth', v, lp: 2600, a: 0.03, hold: true }); note({ f: mtof(m) * 1.004, t, d, type: 'sawtooth', v: v * 0.6, lp: 2000, a: 0.03, hold: true }); };
+  const bell = (f, t, v = 0.28) => { note({ f, t, d: 1.5, v, a: 0.003 }); note({ f: f * 2.01, t, d: 0.7, v: v * 0.3, a: 0.003 }); note({ f: f * 3.02, t, d: 0.35, v: v * 0.14, a: 0.003 }); };
+  function applause(t, d = 2.6, v = 0.11) {
+    for (let i = 0; i < 140; i++) { const at = t + Math.random() * d, fade = 1 - (at - t) / d * 0.7; noise({ t: at, d: 0.025 + Math.random() * 0.03, v: v * fade * (0.5 + Math.random() * 0.5), bp: 1200 + Math.random() * 1800 }); }
+  }
+  // the theme: four bars of a road-trip tune and a final hit
+  function theme() {
+    const e = 60 / 138 / 2;   // one eighth note
+    const mel = [[67,1],[72,1],[76,1],[79,2],[76,1],[79,2], [81,1],[79,1],[76,1],[72,2],[74,1],[76,2],
+                 [77,1],[76,1],[74,1],[72,1],[74,1],[77,1],[81,2], [79,2],[83,2],[86,2],[0,1],[79,1]];
+    let t = 0.05;
+    for (const [m, n] of mel) { if (m) { note({ f: mtof(m), t, d: n * e * 0.92, type: 'square', v: 0.07, lp: 3200, a: 0.006, hold: true }); note({ f: mtof(m + 12), t, d: n * e * 0.8, type: 'triangle', v: 0.04, a: 0.006 }); } t += n * e; }
+    const roots = [48, 45, 41, 43], thirds = [4, 3, 4, 4];
+    roots.forEach((r, b) => {
+      const b0 = 0.05 + b * 8 * e;
+      for (let q = 0; q < 4; q++) note({ f: mtof(q % 2 ? r + 12 : r), t: b0 + q * 2 * e, d: 2 * e * 0.85, type: 'square', v: 0.07, lp: 700, a: 0.005, hold: true });
+      [r + 12, r + 12 + thirds[b], r + 19].forEach(m => note({ f: mtof(m + 12), t: b0, d: 8 * e, type: 'triangle', v: 0.025, a: 0.08, hold: true }));
+      for (let k = 0; k < 8; k++) { hat(b0 + k * e); if (k % 4 === 0) kick(b0 + k * e); if (k % 4 === 2) snare(b0 + k * e); }
+    });
+    const end = 0.05 + 32 * e;
+    snare(end - e, 0.14); snare(end - e / 2, 0.18);
+    [60, 64, 67, 72].forEach(m => brass(m, end, 1.1, 0.07)); note({ f: mtof(84), t: end, d: 1.1, type: 'square', v: 0.07, lp: 3200, hold: true });
+    note({ f: mtof(36), t: end, d: 1.1, type: 'square', v: 0.09, lp: 600, hold: true }); kick(end); crash(end);
   }
   const sounds = {
-    buzz: () => { tone(180, 0, 0.45, 'square', 0.18); tone(182, 0, 0.45, 'sawtooth', 0.08); },
-    correct: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.09, 0.35, 'triangle', 0.25)),
-    wrong: () => { tone(220, 0, 0.3, 'sawtooth', 0.15, 160); tone(150, 0.28, 0.5, 'sawtooth', 0.15, 100); },
-    reveal: () => { tone(880, 0, 0.6, 'sine', 0.2); tone(1320, 0.08, 0.6, 'sine', 0.12); },
-    pass: () => tone(300, 0, 0.18, 'triangle', 0.18, 220),
-    start: () => { tone(392, 0, 0.12, 'triangle', 0.2); tone(587, 0.12, 0.25, 'triangle', 0.2); },
-    timeup: () => { tone(330, 0, 0.9, 'square', 0.14); tone(415, 0, 0.9, 'square', 0.1); },
-    winner: () => [523, 659, 784, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.14, 0.4, 'triangle', 0.22)),
+    // buzz-in: a car horn, two detuned tones like a real one
+    buzz: () => { [405, 508].forEach(f => { note({ f, d: 0.55, type: 'sawtooth', v: 0.14, lp: 2400, a: 0.01, hold: true }); note({ f: f * 1.006, d: 0.55, type: 'square', v: 0.05, lp: 1800, a: 0.01, hold: true }); }); },
+    // correct: ding-ding
+    correct: () => { bell(1319, 0); bell(1760, 0.16); },
+    // wrong: the sad trombone, wah wah wah waaah
+    wrong: () => {
+      [392, 370, 349].forEach((f, i) => note({ f: f * 1.03, to: f, t: i * 0.42, d: 0.38, type: 'sawtooth', v: 0.15, lp: 1100, a: 0.04, hold: true }));
+      note({ f: 340, to: 318, t: 1.26, d: 1.15, type: 'sawtooth', v: 0.15, lp: 1100, a: 0.04, hold: true, vib: [5.5, 9] });
+    },
+    reveal: () => [72, 76, 79, 84].forEach((m, i) => note({ f: mtof(m + 12), t: i * 0.07, d: 0.7, v: 0.13, a: 0.004 })),
+    piece: () => { note({ f: 520, to: 1180, d: 0.1, type: 'triangle', v: 0.22, a: 0.004 }); note({ f: 1560, t: 0.07, d: 0.25, v: 0.08, a: 0.004 }); },
+    show: () => { noise({ d: 0.4, v: 0.25, sweep: [500, 4000], swell: true }); note({ f: 880, t: 0.36, d: 0.3, v: 0.12, type: 'triangle', a: 0.004 }); },
+    pass: () => { note({ f: 330, d: 0.14, type: 'triangle', v: 0.2 }); note({ f: 247, t: 0.13, d: 0.22, type: 'triangle', v: 0.2 }); },
+    start: () => { noise({ d: 0.3, v: 0.18, sweep: [3000, 600] }); note({ f: 784, t: 0.18, d: 0.12, type: 'triangle', v: 0.2 }); note({ f: 1175, t: 0.3, d: 0.3, type: 'triangle', v: 0.2 }); },
+    tick: () => { noise({ d: 0.03, v: 0.32, hp: 3500 }); note({ f: 1900, d: 0.04, v: 0.08, a: 0.002 }); },
+    tock: () => { noise({ d: 0.04, v: 0.36, hp: 2500 }); note({ f: 1046, d: 0.12, v: 0.2, type: 'triangle', a: 0.002 }); },
+    timeup: () => [150, 156].forEach(f => note({ f, d: 0.9, type: 'square', v: 0.13, lp: 1500, hold: true })),
+    drumroll: () => { noise({ d: 1.5, v: 0.28, bp: 2200, trem: 26, swell: true }); crash(1.5); snare(1.5, 0.25); kick(1.5); },
+    award: () => { noise({ d: 0.8, v: 0.24, bp: 2200, trem: 28, swell: true }); [72, 76, 79].forEach(m => brass(m, 0.8, 0.2, 0.08)); [72, 76, 79, 84].forEach(m => brass(m, 1.02, 0.9, 0.07)); crash(1.02, 0.16); applause(1.1, 1.8, 0.08); },
+    winner: () => {
+      const e = 0.16;
+      [[67,1],[72,1],[76,1],[79,2],[76,1],[79,4]].reduce((t, [m, n]) => { brass(m, t, n * e * 0.95, 0.1); return t + n * e; }, 0);
+      [60, 64, 67, 72].forEach(m => brass(m, 10 * e, 1.4, 0.06)); kick(10 * e); crash(10 * e, 0.25); applause(10 * e, 3.2, 0.12);
+    },
+    theme,
   };
   return {
     unlock,
-    play: n => { try { sounds[n] && sounds[n](); } catch (e) {} },
+    play: n => { try { if (ctx && sounds[n]) sounds[n](); } catch (e) {} },
     get ready() { return !!ctx && ctx.state === 'running'; },
   };
 })();

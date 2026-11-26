@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0e1726">
 <title>Plate Pursuit · Buzzer</title>
-<link rel="stylesheet" href="style.css?v=31">
+<link rel="stylesheet" href="style.css?v=32">
 </head>
 <body class="phone-page">
 <div class="phone" id="app"></div>
-<script src="mode.js?v=31"></script>
+<script src="mode.js?v=32"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="shared.js?v=31"></script>
+<script src="shared.js?v=32"></script>
 <script>
 const app = document.getElementById('app');
 if (PP.needRoom('JOIN THE GAME')) throw new Error('waiting for room code');
@@ -112,6 +112,7 @@ function start() {
   PP.connect(me.id);
 }
 
+let lastMsg = null;
 function render(s) {
   if (!s || !me || !document.getElementById('buzz')) return;
   const t = s.teams.find(x => x.id === me.id);
@@ -155,6 +156,11 @@ function render(s) {
       msg = s.speed.teamId === me.id ? '<b>Speed round: it\'s your turn! Look at the screen.</b>' : `Speed round: ${esc(teamName(s, s.speed.teamId))}`;
       if (s.phase === 'speedover') msg = `Speed round over: ${s.speed.count} solved`;
       break;
+    case 'awards': {
+      const won = s.awards.list.slice(0, s.awards.shown).filter(a => a.teamId === me.id);
+      msg = won.length ? `<b>You won ${won.map(a => esc(a.title)).join(' + ')}!</b>` : 'Awards time! Watch the screen.';
+      break;
+    }
     case 'final': {
       const ranks = ppRanking(s), mineR = ranks.find(r => r.team.id === me.id);
       const firsts = ranks.filter(r => r.rank === 1).length;
@@ -166,7 +172,7 @@ function render(s) {
   if (s.tb && ['ready', 'running', 'buzzed', 'paused'].includes(s.phase) && !s.tb.teams.includes(me.id))
     msg = 'Tie-breaker: ' + s.tb.teams.map(id => esc(teamName(s, id))).join(' vs ');
   else if (s.tb && s.phase === 'ready') msg = '<b>Tie-breaker!</b> First right answer wins.';
-  $('msg').innerHTML = msg;
+  if (msg !== lastMsg) { lastMsg = msg; $('msg').innerHTML = msg; const m = $('msg'); m.classList.remove('pop'); void m.offsetWidth; m.classList.add('pop'); }
   b.disabled = !enabled || pending;
   b.classList.toggle('mine', mine);
   $('buzzLabel').textContent = label;

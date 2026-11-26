@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Projector</title>
-<link rel="stylesheet" href="style.css?v=31">
+<link rel="stylesheet" href="style.css?v=32">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body class="display-page">
@@ -16,13 +16,46 @@
 <div class="unlock" id="unlock"><div class="sign green">Click to start the projector<small>Turns on sound and goes full screen</small></div></div>
 <div class="conn" id="conn"></div>
 
-<script src="mode.js?v=31"></script>
+<script src="mode.js?v=32"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="states.js?v=31"></script>
-<script src="shared.js?v=31"></script>
+<script src="states.js?v=32"></script>
+<script src="shared.js?v=32"></script>
 <script>
 const $ = id => document.getElementById(id);
-let lastEv = null, lastKey = '', lastPlateKey = '';
+let lastEv = null, lastKey = '', lastPlateKey = '', fxNext = null;
+
+// ---- effects that go with the sounds (these run whatever the Mac's Reduce Motion setting is) ----
+function restart(el, cls) { if (!el) return; el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+function flash(color) {
+  const f = document.createElement('div'); f.className = 'fx-flash'; f.style.background = color;
+  document.body.appendChild(f); setTimeout(() => f.remove(), 700);
+}
+const CONFETTI = ['#f4c20d', '#ffffff', '#1f7a3a', '#d93b2b', '#2b6cd9', '#ef8a17', '#8a4fd1'];
+function confetti(n = 80, from = null, colors = CONFETTI) {
+  const box = document.createElement('div'); box.className = 'fx-confetti';
+  for (let i = 0; i < n; i++) {
+    const c = document.createElement('i');
+    const x = from ? from.x + (Math.random() - 0.5) * 20 : Math.random() * 100;
+    c.style.cssText = `left:${x}vw;top:${from ? from.y : -5}vh;background:${colors[i % colors.length]};--dx:${(Math.random() - 0.5) * (from ? 70 : 30)}vw;--dy:${from ? 40 + Math.random() * 50 : 105 + Math.random() * 10}vh;--r:${(Math.random() - 0.5) * 1440}deg;--up:${from ? -(15 + Math.random() * 30) : 0}vh;animation-delay:${Math.random() * (from ? 0.15 : 1.4)}s;animation-duration:${(from ? 1.4 : 2.6) + Math.random() * 1.4}s`;
+    box.appendChild(c);
+  }
+  document.body.appendChild(box); setTimeout(() => box.remove(), 6000);
+}
+const colorOf = (s, id) => teamColor(s.teams.find(x => x.id === id));
+function fx(type, s) {
+  const plate = document.querySelector('#stage .d-plate');
+  if (type === 'buzz') { flash(colorOf(s, s.buzzed)); restart(plate, 'fx-honk'); }
+  else if (type === 'wrong') { if (s.phase !== 'fjudge' && s.phase !== 'fanswer') restart(plate, 'fx-shake'); }
+  else if (type === 'correct') {
+    restart(plate, 'fx-glow');
+    const id = s.result ? s.result.teamId : s.speed && s.phase === 'speed' ? s.speed.teamId : null;
+    const el = id != null && [...document.querySelectorAll('#teams .d-team')][s.teams.findIndex(t => t.id === id)];
+    if (el) { const r = el.getBoundingClientRect(); confetti(40, { x: (r.left + r.width / 2) / innerWidth * 100, y: r.top / innerHeight * 100 }, ['#f4c20d', '#ffffff', colorOf(s, id)]); }
+  }
+  else if (type === 'award') { const w = s.awards && s.awards.list[s.awards.shown - 1]; setTimeout(() => confetti(70, { x: 50, y: 45 }, ['#f4c20d', '#ffffff', w ? colorOf(s, w.teamId) : '#1f7a3a']), 900); }   // after the drum roll
+  else if (type === 'winner') { confetti(220); setTimeout(() => confetti(160), 1800); }
+  else if (type === 'piece') restart(document.querySelector('#stage .d-answer'), 'fx-pop');
+}
 
 $('unlock').onclick = () => {
   SFX.unlock();
@@ -32,7 +65,7 @@ $('unlock').onclick = () => {
 
 function stageKey(s) {
   // Re-render the stage only when what it shows changes; the clock ticks separately.
-  return JSON.stringify([s.phase, s.cur, s.buzzed, s.result, s.speed && s.speed.count, s.joinUrl, s.room, s.teams.map(t => t.name + t.color), !!p_double(s), s.tb, s.tbWinner, s.fin && s.fin.marks, s.step, s.fin && s.fin.shown, s.phase === 'final' ? s.teams.map(t => t.score) : 0]);
+  return JSON.stringify([s.phase, s.cur, s.buzzed, s.result, s.speed && s.speed.count, s.joinUrl, s.room, s.teams.map(t => t.name + t.color), !!p_double(s), s.tb, s.tbWinner, s.fin && s.fin.marks, s.step, s.fin && s.fin.shown, s.phase === 'final' ? s.teams.map(t => t.score) : 0, s.awards && s.phase === 'awards' && s.awards.shown]);
 }
 
 const p_double = s => (s.puzzles[s.cur] || {}).double && ['ready', 'running', 'buzzed', 'paused', 'revealed'].includes(s.phase) && !s.tb;
@@ -58,11 +91,21 @@ function renderStage(s) {
     else $('qr').remove();
     return;
   }
+  if (s.phase === 'awards') {
+    const a = s.awards, icon = { fast: '⚡', streak: '🔥', big: '★', speed: '⏱', bet: '$', comeback: '↑' };
+    html = `<div class="d-awards"><div class="sign yellow d-aw-h">AWARDS</div><div class="d-aw-grid n${a.list.length}">${a.list.map((w, i) => {
+      if (i >= a.shown) return `<div class="sign white d-award hid"><div class="ic">?</div><div class="t">Award ${i + 1}</div></div>`;
+      const t = s.teams.find(x => x.id === w.teamId);
+      return `<div class="sign green d-award ${i === a.shown - 1 ? 'new' : ''}" style="${teamStyle(t)}"><div class="ic">${icon[w.key] || '★'}</div>
+        <div class="t">${esc(w.title)}</div><div class="who">${esc(t ? t.name : '')}</div><div class="d">${esc(w.detail)}</div></div>`;
+    }).join('')}</div></div>`;
+    st.innerHTML = html; return;
+  }
   if (s.phase === 'final') {
     const ranked = ppRanking(s);
     const firsts = ranked.filter(r => r.rank === 1).length;
     html = `<div class="sign green d-board"><div class="h">FINAL STANDINGS</div>
-      ${ranked.map(r => `<div class="rank ${r.rank === 1 ? 'top' : ''}"><span><i class="swatch" style="${teamStyle(r.team)}"></i>${r.rank === 1 ? `<small class="tag">${firsts > 1 ? 'TIED' : 'WINNER'}</small>` : r.rank + '. '}${esc(r.team.name)}</span><span>${r.team.score}</span></div>`).join('')}</div>`;
+      ${ranked.map((r, i) => `<div class="rank ${r.rank === 1 ? 'top' : ''}" style="--i:${ranked.length - 1 - i}"><span><i class="swatch" style="${teamStyle(r.team)}"></i>${r.rank === 1 ? `<small class="tag">${firsts > 1 ? 'TIED' : 'WINNER'}</small>` : r.rank + '. '}${esc(r.team.name)}</span><span>${r.team.score}</span></div>`).join('')}</div>`;
     st.innerHTML = html; return;
   }
   if (s.phase === 'fwager' || s.phase === 'fanswer' || s.phase === 'fjudge') {
@@ -134,10 +177,10 @@ addEventListener('resize', fitStage);
 document.fonts && document.fonts.ready.then(fitStage);
 function renderTeams(s) {
   const roundNames = { lobby: '', ready: 'Buzz-in round', running: 'Buzz-in round', buzzed: 'Buzz-in round', paused: 'Buzz-in round', revealed: 'Buzz-in round',
-    speedready: 'Speed round', speed: 'Speed round', speedover: 'Speed round', final: 'Game over',
+    speedready: 'Speed round', speed: 'Speed round', speedover: 'Speed round', final: 'Game over', awards: 'Awards',
     fwager: 'Final plate', fanswer: 'Final plate', fjudge: 'Final plate' };
   $('round').textContent = s.tb && !['final', 'lobby'].includes(s.phase) ? 'Tie-breaker' : (roundNames[s.phase] || '');
-  $('teams').innerHTML = s.teams.map(t => {
+  const html = s.teams.map(t => {
     const cls = [s.buzzed === t.id && s.phase === 'buzzed' ? 'buzzed' : '',
       s.locked.includes(t.id) && (['running', 'buzzed', 'paused'].includes(s.phase) || (s.tb && s.phase === 'ready')) ? 'out' : '',
       s.speed && s.speed.teamId === t.id && s.phase.startsWith('speed') ? 'active' : ''].join(' ');
@@ -149,13 +192,37 @@ function renderTeams(s) {
       const m = s.fin.marks[t.id], w = s.fin.wagers[t.id] || 0;
       sub = esc(s.fin.answers[t.id] || '(no answer)') + (m === true ? ` <b class="plus">+${w}</b>` : m === false ? ` <b class="minus">−${w}</b>` : '');
     }
-    return `<div class="sign green d-team ${cls}" style="${teamStyle(t)}"><div class="n">${esc(t.name)}</div><div class="s">${ppShownScore(s, t)}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
+    const sc = ppShownScore(s, t);
+    if (prevScore[t.id] != null && sc !== prevScore[t.id]) bumps[t.id] = { until: Date.now() + 1600, d: sc - prevScore[t.id], n: ((bumps[t.id] || {}).n || 0) + 1 };
+    prevScore[t.id] = sc;
+    const b = bumps[t.id] && bumps[t.id].until > Date.now() ? bumps[t.id] : null;
+    return `<div class="sign green d-team ${cls} ${b ? (b.d > 0 ? 'bump' : 'bump down') : ''}" style="${teamStyle(t)}" data-b="${b ? b.n : 0}"><div class="n">${esc(t.name)}</div><div class="s">${sc}</div>${sub ? `<div class="sub">${sub}</div>` : ''}${b ? `<div class="delta">${b.d > 0 ? '+' : '−'}${Math.abs(b.d)}</div>` : ''}</div>`;
   }).join('');
+  if (html !== lastTeamsHTML) { lastTeamsHTML = html; $('teams').innerHTML = html; }   // unchanged: leave it, so the score animations run to the end
 }
+const prevScore = {}, bumps = {};
+let lastTeamsHTML = '';
 
 
+// Countdown ticks: every second of the answer countdown, the last 10 of the speed round and the final answer.
+let tickCtx = '', tickSec = null;
+function countdownSound(s) {
+  let left = null, from = 0;
+  if (s.phase === 'buzzed' && s.answerEndsAt) { left = ppAnswerLeft(s); from = Infinity; }
+  else if (s.phase === 'speed') { left = ppSpeedLeft(s); from = 10; }
+  else if (s.phase === 'fanswer') { left = ppFinalLeft(s); from = 10; }
+  const ctx = s.phase + ':' + s.cur + ':' + (s.answerEndsAt || (s.speed && s.speed.endsAt) || (s.fin && s.fin.endsAt) || '');
+  if (left == null) { tickCtx = ''; tickSec = null; return; }
+  const sec = Math.ceil(left);
+  if (ctx === tickCtx && tickSec != null && sec < tickSec) {
+    if (sec > 0 && sec <= from) SFX.play(sec <= 3 ? 'tock' : 'tick');
+    else if (sec === 0 && s.phase === 'buzzed') SFX.play('timeup');
+  }
+  tickCtx = ctx; tickSec = sec;
+}
 function tick() {
   const s = PP.state; if (!s) return;
+  countdownSound(s);
   if (['ready', 'running', 'buzzed', 'paused'].includes(s.phase) && $('value')) {
     const v = s.phase === 'buzzed' ? s.valueAtBuzz : ppValue(s);
     $('value').textContent = v;
@@ -185,10 +252,11 @@ PP.on(s => {
   $('conn').textContent = PP.status || (PP.connected ? '' : 'Connecting…');
   if (!s) return;
   if (lastEv === null) lastEv = s.ev.n;
-  else if (s.ev.n !== lastEv) { lastEv = s.ev.n; SFX.play(s.ev.type); }
+  else if (s.ev.n !== lastEv) { lastEv = s.ev.n; SFX.play(s.ev.type); fxNext = s.ev.type; }
   const k = stageKey(s);
   if (k !== lastKey) { lastKey = k; renderStage(s); }
   renderTeams(s); tick(); fitStage();
+  if (fxNext) { fx(fxNext, s); fxNext = null; }
 });
 PP.connect();
 ppForwardKeys();   // Ctrl+Shift shortcuts pressed here go to the control page

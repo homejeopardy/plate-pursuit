@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Host</title>
-<link rel="stylesheet" href="style.css?v=31">
+<link rel="stylesheet" href="style.css?v=32">
 </head>
 <body class="host-page">
 <div class="host">
@@ -98,11 +98,11 @@
   </div>
 </div>
 
-<script src="mode.js?v=31"></script>
+<script src="mode.js?v=32"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="engine.js?v=31"></script>
-<script src="states.js?v=31"></script>
-<script src="shared.js?v=31"></script>
+<script src="engine.js?v=32"></script>
+<script src="states.js?v=32"></script>
+<script src="shared.js?v=32"></script>
 <script>
 const $ = id => document.getElementById(id);
 const act = PP.act;
@@ -167,8 +167,13 @@ function phaseControls(s, B) {
     case 'speedready': return B('speedStart', 'Start 60 seconds', '⌃⇧G', 'primary');
     case 'speed': return B('correct', 'Correct', '⌃⇧C', 'good') + B('pass', 'Pass', '⌃⇧P', 'bad') + B('speedStop', 'Stop clock', '⌃⇧K');
     case 'speedover': return B('next', 'Back to buzz-in plates', '⌃⇧N', 'primary') + B('final', 'Final standings', '⌃⇧E', 'gold');
+    case 'awards': {
+      const a = s.awards, more = a.shown < a.list.length;
+      return B('awardNext', more ? `Show award ${a.shown + 1} of ${a.list.length}` : 'Final standings', '⌃⇧G', more ? 'primary' : 'gold')
+        + (more ? B('final', 'Skip to final standings', '⌃⇧E') : '');
+    }
     case 'final': return (ppTiedTop(s).length ? B('tiebreak', 'Tie-breaker plate', '⌃⇧T', 'primary') : '') + B('lobby', 'Back to join screen', '⌃⇧J');
-    default: return B('next', 'First plate', '⌃⇧G', 'primary');
+    default: return B('next', 'First plate', '⌃⇧G', 'primary') + B('theme', 'Play theme ♪', '');
   }
 }
 
@@ -209,10 +214,10 @@ function render(s) {
   const base = location.href.replace(/[^/]*$/, ''), rq = s.room ? '?room=' + s.room : '';
   $('crew').innerHTML = `Host script: <b>${esc(base + 'stage.html' + rq)}</b> · Pointer: <b>${esc(base + 'pointer.html' + rq)}</b> <span>(open these on a tablet or phone)</span>`;
   const phaseNames = { lobby: 'Join screen', ready: 'Plate is covered', running: 'Clock running', buzzed: 'Buzzed in', paused: 'Waiting for you to reopen buzzing', revealed: 'Answer shown',
-    speedready: 'Speed round ready', speed: 'Speed round running', speedover: 'Speed round over', final: 'Final standings',
+    speedready: 'Speed round ready', speed: 'Speed round running', speedover: 'Speed round over', final: 'Final standings', awards: 'Awards',
     fwager: 'Final plate: teams are betting', fanswer: 'Final plate: teams are typing answers', fjudge: 'Final plate: mark each answer' };
   $('nowTitle').textContent = 'Now: ' + (phaseNames[s.phase] || s.phase);
-  const showPlate = p && !['lobby', 'final', 'speedready'].includes(s.phase);
+  const showPlate = p && !['lobby', 'final', 'awards', 'speedready'].includes(s.phase);
   $('hPlate').innerHTML = showPlate ? puzzlePlate(p, { parts: ['revealed', 'fjudge'].includes(s.phase) && p.parts, step: s.step }) : plateHTML('');
   $('hAnswer').textContent = showPlate ? p.answer : '';
   if (showPlate && ['revealed', 'fjudge'].includes(s.phase) && pieceTotal(p) > 1)
@@ -227,6 +232,7 @@ function render(s) {
     status = `<div class="note"><b>Tie-breaker:</b> ${s.tb.teams.map(id => esc(teamName(s, id))).join(' vs ')}. No points; first right answer wins.</div>` + status;
   if (s.phase === 'revealed' && s.result && s.result.tiebreak) status = `<b>${esc(teamName(s, s.result.teamId))}</b> wins the tie-breaker`;
   if (s.fin && ['fwager', 'fanswer', 'fjudge'].includes(s.phase)) status = finalPanel(s);
+  if (s.phase === 'awards') status = s.awards.list.map((a, i) => `<div class="${i < s.awards.shown ? '' : 'note'}">${i < s.awards.shown ? '✓' : (i + 1) + '.'} <b>${esc(a.title)}</b>: ${esc(teamName(s, a.teamId))} (${esc(a.detail)})</div>`).join('');
   if (!s.tb && s.locked.length && ['running', 'buzzed', 'paused'].includes(s.phase)) status += `<div class="note">Locked out: ${s.locked.map(id => esc(teamName(s, id))).join(', ')}</div>`;
   $('hStatus').innerHTML = status;
   $('hStatus').querySelectorAll('[data-mark]').forEach(b => b.onclick = () => act('finalMark', { teamId: b.dataset.mark, right: b.dataset.right === '1' }));
@@ -290,6 +296,7 @@ setInterval(tick, 100);
 
 // Shortcuts: Ctrl+Shift+letter (PP_KEYS in shared.js). The projector window passes its presses here too.
 function goStep(s) {   // the one-button "next step"
+  if (s.phase === 'awards') return act('awardNext');
   if (s.phase === 'ready') return act('start');
   if (s.phase === 'paused') return act('reopen');
   if (s.phase === 'fwager') return act('finalShow');
@@ -316,6 +323,7 @@ function runKey(name) {
     const t = s.teams[Number(name.slice(4)) - 1]; if (!t) return;
     $('speedTeam').value = String(t.id); toast(`Speed round: ${t.name} picked. Press SEND TO BOARD (⌃⇧S) to put it on the screen.`);
   }
+  else if (s.phase === 'awards' && ['reveal', 'stepAll'].includes(name)) act('awardNext');
   else act(name);
 }
 document.addEventListener('keydown', e => {
