@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flip Side · Host script</title>
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body class="stage-page">
+<div class="s-wrap">
+  <div class="row" style="justify-content:space-between"><div class="logo">FLIP <b>SIDE</b></div><span class="note" id="conn" style="color:#aaa"></span></div>
+  <div id="banner"></div>
+  <div class="s-say"><div class="lbl">SAY</div><div id="say"></div></div>
+  <div class="s-ans" id="ans"></div>
+  <div class="s-scores" id="scores"></div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script src="net.js?v=1"></script>
+<script>
+const $ = id => document.getElementById(id);
+if (PP.needRoom('HOST SCRIPT')) throw new Error('waiting for room code');
+fsForwardKeys();
+let picFor = null;
+function render(s) {
+  $('conn').textContent = PP.status || (PP.connected ? '' : 'Connecting…');
+  if (!s) return;
+  const p = fsPuzzle(s), n = id => esc(teamName(s, id));
+  const turn = s.turn, r = s.result || {};
+  let say = [];
+  switch (s.phase) {
+    case 'lobby': say = ['Welcome to Flip Side!', 'Grab a phone, scan the code on the screen, and pick your team.']; break;
+    case 'pick':
+      say = s.flips.length ? [`${n(turn)}, pick your second card.`]
+        : s.board.filter(c => c.gone).length === 0 && s.flips.length === 0 ? [`Behind these cards is a picture puzzle. Match two cards and they come off.`, `${n(turn)}, you're up. Pick two cards!`]
+        : [`${n(turn)}, pick two cards!`];
+      break;
+    case 'miss': say = ['Not a match!', 'Remember where those were.']; break;
+    case 'lost': say = ['Ooh, lose a turn!', 'But those cards come off, so look closely.']; break;
+    case 'match':
+      if (r.effect === 'take') say = [r.took ? `${n(r.team)} takes ${r.took.v} points from ${n(r.took.from)}!` : 'A TAKE, but there\'s nothing to take yet!'];
+      else if (r.cards && r.cards.every(c => c === 'WILD')) say = [`Two wild cards! That's ${r.points} points!`];
+      else if (r.cards && r.cards.includes('WILD')) say = [`A wild card! It matches the ${r.cards.find(c => c !== 'WILD')}, and both of those come off.`];
+      else say = [`It's a match! ${r.points} points.`];
+      say.push(`${n(r.team)}, do you want to solve the puzzle?`);
+      break;
+    case 'solve': say = [`${n(s.solver)}, what's the answer?`]; break;
+    case 'buzz': say = ['The board is clear!', 'Buzz in on your phone if you know it!']; break;
+    case 'solved': say = r.kind === 'solved' ? ['That\'s right!', `It's "${esc(p ? p.answer : '')}". ${n(r.team)} banks ${r.points} points!`] : [`The answer was "${esc(p ? p.answer : '')}".`]; break;
+    case 'final': { const top = fsRanking(s)[0]; say = ['And the winner is…', top ? `${esc(top.team.name)} with ${top.team.score} points!` : '']; break; }
+  }
+  $('say').innerHTML = say.map(x => `<p>${x}</p>`).join('');
+  const who = s.teams.find(t => t.id === s.solver);
+  $('banner').innerHTML = s.phase === 'solve' && who ? `<div class="s-banner" style="${teamStyle(who)}"><span>${esc(who.name)} is solving</span><span class="c" id="count"></span></div>` : '';
+  const showP = p && !['lobby', 'final'].includes(s.phase);
+  if (!showP) { $('ans').innerHTML = ''; picFor = null; }
+  else if (picFor !== p.img + '|' + p.answer) {
+    picFor = p.img + '|' + p.answer;
+    $('ans').innerHTML = `<img id="pic" alt=""><div><div class="lbl">ANSWER</div><div class="a">${esc(p.answer)}</div>${p.hint ? `<div class="note" style="color:#ccc;margin-top:6px">${esc(p.hint)}</div>` : ''}</div>`;
+    PP.getImage(p.img).then(src => { if ($('pic') && src) $('pic').src = src; });
+  }
+  $('scores').innerHTML = s.phase === 'lobby' ? '' : s.teams.map(t => `<div style="${teamStyle(t)}">${esc(t.name)}<b>${t.score}</b>${fsPot(s, t.id) && !['solved', 'final'].includes(s.phase) ? ` <span class="note" style="color:#aaa">+${fsPot(s, t.id)}</span>` : ''}</div>`).join('');
+  tick();
+}
+function tick() { const s = PP.state, el = $('count'); if (s && el) el.textContent = fsAnswerText(s); }
+setInterval(tick, 200);
+PP.on(render);
+PP.connect();
+</script>
+</body>
+</html>

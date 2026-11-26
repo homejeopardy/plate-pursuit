@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#1d5a3c">
+<title>Flip Side · Phone</title>
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body class="play-page">
+<div class="p-wrap" id="app"></div>
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script src="net.js?v=1"></script>
+<script>
+const app = document.getElementById('app');
+const $ = id => document.getElementById(id);
+if (PP.needRoom('JOIN THE GAME')) throw new Error('waiting for room code');
+const KEY = 'flip-side-team-' + PP.room;
+let me = null;
+try { me = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+let joining = false, typing = false, pickKey = '', busy = false;
+
+// ---------- joining: tap your team (or type one if it isn't listed) ----------
+function showJoin(msg, keepName = '') {
+  joining = false; pickKey = '';
+  app.innerHTML = `<div class="p-head"><div class="logo">FLIP <b>SIDE</b></div><span class="note" style="color:#cfe">Room <b>${esc(PP.room)}</b></span></div>
+    <div class="p-join"><h2>WHICH TEAM ARE YOU?</h2>
+    <div class="p-teams" id="pick"></div>
+    <div id="newWrap" ${typing || keepName ? '' : 'hidden'} style="margin-top:10px"><input id="name" maxlength="24" placeholder="Team name" autocomplete="off" value="${esc(keepName)}">
+      <button class="p-big again" id="go" style="margin-top:10px">Join</button></div>
+    <div style="text-align:center"><button class="p-link" id="notListed">${typing ? 'Back to the team list' : "My team isn't listed"}</button></div>
+    <div class="p-status" id="jstatus">${esc(msg || '')}</div>
+    <p class="note" style="color:#cfe;text-align:center">One phone per team is plenty.</p></div>`;
+  const goNew = () => { const name = $('name').value.trim(); if (!name) return $('name').focus(); joinAs({ name }, $('go'), name); };
+  $('go').onclick = goNew;
+  $('name').onkeydown = e => { if (e.key === 'Enter') goNew(); };
+  $('notListed').onclick = () => { typing = !typing; showJoin(); if (typing) $('name').focus(); };
+  renderPick(PP.state);
+}
+async function joinAs(data, btn, keepName = '') {
+  if (joining) return;
+  joining = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Joining…'; }
+  $('jstatus').textContent = PP.status || 'Connecting to the host…';
+  const r = await PP.post('/join', data);
+  if (!r.ok || !r.team) return showJoin(PP.status || "Couldn't reach the host. Check the room code and try again.", keepName);
+  me = { id: r.team.id };
+  try { localStorage.setItem(KEY, JSON.stringify(me)); } catch (e) {}
+  typing = false; start();
+}
+function renderPick(s) {
+  const el = $('pick'); if (!el || joining) return;
+  const key = JSON.stringify([typing, s && s.teams.map(t => [t.id, t.name, t.color, !!(s.online || {})[t.id]])]);
+  if (key === pickKey) return; pickKey = key;
+  if (!s) { el.innerHTML = `<p class="note" style="color:#cfe;text-align:center">${esc(PP.status || 'Loading the teams…')}</p>`; return; }
+  if (!s.teams.length) { el.innerHTML = ''; $('newWrap').hidden = false; return; }
+  el.innerHTML = typing ? '' : s.teams.map(t => { const taken = !!(s.online || {})[t.id];
+    return `<button class="${taken ? 'taken' : ''}" data-id="${t.id}" style="${teamStyle(t)}">${esc(t.name)}<small>${taken ? 'has a phone' : 'tap to join'}</small></button>`; }).join('');
+  el.querySelectorAll('[data-id]').forEach(b => b.onclick = () => {
+    const t = s.teams.find(x => String(x.id) === b.dataset.id); if (!t) return;
+    if (b.classList.contains('taken') && !confirm(`${t.name} already has a phone. Use this one too?`)) return;
+    joinAs({ teamId: t.id, name: t.name }, b);
+  });
+}
+PP.on(s => { renderPick(s); const j = $('jstatus'); if (j && joining) j.textContent = PP.status || 'Connecting to the host…'; });
+
+// ---------- playing ----------
+function start() {
+  app.innerHTML = `<div class="p-head"><div class="logo">FLIP <b>SIDE</b></div><button class="p-link" id="leave" style="font-size:13px">Switch team</button></div>
+    <div class="p-me" id="meBox"><div class="nm" id="nm"></div><div><div class="sc" id="sc"></div><div class="pot" id="pot"></div></div></div>
+    <div class="p-status" id="status"></div>
+    <div id="main"></div>`;
+  $('leave').onclick = () => { if (confirm('Leave this team on this phone?')) { try { localStorage.removeItem(KEY); } catch (e) {} location.reload(); } };
+  PP.connect(me.id);
+  render(PP.state);
+}
+async function send(url, data) {
+  if (busy) return; busy = true;
+  const r = await PP.post(url, { teamId: me.id, ...data });
+  busy = false;
+  if (!r.ok && !PP.status) flash("That didn't go through. Try again.");
+  render(PP.state);
+}
+let flashT = null;
+function flash(t) { const el = $('status'); if (!el) return; el.textContent = t; clearTimeout(flashT); flashT = setTimeout(() => render(PP.state), 2500); }
+
+let lastMain = '';
+function gridHTML(s, mine) {
+  const peek = ['pick', 'miss', 'lost', 'match'].includes(s.phase) ? s.flips : [];
+  return `<div class="p-grid${mine ? ' mine' : ''}">${s.board.map(c => {
+    const up = peek.includes(c.n);
+    return `<button data-n="${c.n}" class="${c.gone && !up ? 'gone' : ''}${up ? ' up' : ''}"${!mine || up || c.gone ? ' disabled' : ''}>${up ? esc(fsCardLabel(c)) : c.n}</button>`;
+  }).join('')}</div>`;
+}
+function render(s) {
+  if (!s || !me || !$('main')) return;
+  const t = s.teams.find(x => x.id === me.id);
+  if (!t) { try { localStorage.removeItem(KEY); } catch (e) {} me = null; showJoin('Your team was removed or a new game started. Pick your team again.'); return; }
+  $('meBox').style.cssText = teamStyle(t);
+  $('nm').textContent = t.name; $('sc').textContent = t.score;
+  const pot = fsPot(s, t.id);
+  $('pot').textContent = pot && !['solved', 'lobby', 'final'].includes(s.phase) ? `+${pot} if you solve` : '';
+  if (!flashT || !$('status').textContent) $('status').textContent = PP.status || '';
+  const turn = s.teams.find(x => x.id === s.turn), myTurn = s.turn === me.id;
+  let h = '';
+  const M = (big, small = '') => `<div class="p-msg">${big}${small ? `<small>${small}</small>` : ''}</div>`;
+  if (s.phase === 'lobby') h = M("You're in!", 'Watch the big screen. The game starts soon.');
+  else if (s.phase === 'final') {
+    const r = fsRanking(s), mine = r.find(x => x.team.id === me.id);
+    h = M(mine && mine.rank === 1 ? 'You win!' : `You came #${mine ? mine.rank : '?'}`, 'Thanks for playing!') +
+      `<div class="p-scores">${r.map(x => `<div style="${teamStyle(x.team)}"><span>${x.rank}. ${esc(x.team.name)}</span><span>${x.team.score}</span></div>`).join('')}</div>`;
+  } else if (s.phase === 'pick') {
+    h = myTurn ? M('Your turn!', s.flips.length ? 'Pick one more card.' : 'Pick two cards.') + gridHTML(s, true)
+      : M(`${esc(turn ? turn.name : '')} is picking`, 'Remember where the cards are!') + gridHTML(s, false);
+  } else if (s.phase === 'miss') {
+    h = M(myTurn ? 'No match' : `${esc(turn ? turn.name : '')}: no match`, 'Remember them!') + gridHTML(s, false);
+  } else if (s.phase === 'lost') {
+    h = M(myTurn ? 'Lose a turn!' : `${esc(turn ? turn.name : '')} loses a turn`) + gridHTML(s, false);
+  } else if (s.phase === 'match') {
+    if (myTurn) {
+      h = M(esc(fsResultText(s)), 'Know the puzzle? Solve it! Or keep matching.') +
+        `<button class="p-big solve" id="solveBtn">SOLVE IT</button>` + (fsLeft(s) ? `<button class="p-big again" id="againBtn">Pick two more</button>` : '');
+    } else h = M(`${esc(turn ? turn.name : '')} made a match`, esc(fsResultText(s))) + gridHTML(s, false);
+  } else if (s.phase === 'solve') {
+    const solver = s.teams.find(x => x.id === s.solver);
+    h = s.solver === me.id ? M('Say your answer out loud!') + `<div class="p-count" id="count"></div>` : M(`${esc(solver ? solver.name : '')} is solving…`);
+  } else if (s.phase === 'buzz') {
+    h = s.locked.includes(me.id) ? M("You've had your guess", 'Wait for the others.') : M('Board clear!', 'First to buzz gets to solve.') + `<button class="p-big buzz" id="buzzBtn">SOLVE!</button>`;
+  } else if (s.phase === 'solved') {
+    const r = s.result || {};
+    h = r.kind === 'solved' ? M(r.team === me.id ? `You solved it! +${r.points}` : `${esc(teamName(s, r.team))} solved it`, `It was: ${esc((fsPuzzle(s) || {}).answer || '')}`)
+      : M('Nobody got it', `It was: ${esc((fsPuzzle(s) || {}).answer || '')}`);
+  }
+  if (h !== lastMain) {
+    const m = $('main'); m.innerHTML = h; lastMain = h;
+    m.querySelectorAll('.p-grid.mine button[data-n]').forEach(b => b.onclick = () => { if (navigator.vibrate) navigator.vibrate(30); send('/flip', { n: Number(b.dataset.n) }); });
+    if ($('solveBtn')) $('solveBtn').onclick = () => send('/solve');
+    if ($('againBtn')) $('againBtn').onclick = () => send('/again');
+    if ($('buzzBtn')) $('buzzBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (navigator.vibrate) navigator.vibrate(150); send('/solve'); });
+  }
+  tick();
+}
+function tick() { const s = PP.state, el = $('count'); if (s && el) el.textContent = fsAnswerText(s); }
+setInterval(tick, 200);
+PP.on(render);
+if (me && me.id) start(); else { showJoin(); PP.connect(); }
+</script>
+</body>
+</html>

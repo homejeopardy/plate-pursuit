@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flip Side · Projector</title>
+<link rel="stylesheet" href="style.css?v=1">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body class="display-page">
+<div class="d-wrap" id="wrap">
+  <div class="d-top"><div class="logo">FLIP <b>SIDE</b></div><div class="d-round" id="round"></div><div class="d-turn" id="turn"></div></div>
+  <div class="d-mid" id="mid"></div>
+  <div class="d-teams" id="teams"></div>
+</div>
+<div class="d-conn" id="conn"></div>
+<button class="btn small d-sound" id="unlock">Click for sound + full screen</button>
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script src="net.js?v=1"></script>
+<script>
+const $ = id => document.getElementById(id);
+if (PP.needRoom('PROJECTOR')) throw new Error('waiting for room code');
+fsForwardKeys();
+
+$('unlock').onclick = () => {
+  SFX.unlock(); $('unlock').remove();
+  if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+};
+
+const CONFETTI = ['#e9b52f', '#ffffff', '#a8222c', '#2453a6'];
+function confetti(n = 80, colors = CONFETTI) {
+  for (let i = 0; i < n; i++) {
+    const c = document.createElement('div'); c.className = 'fx-confetti';
+    c.style.left = Math.random() * 100 + 'vw'; c.style.background = colors[i % colors.length];
+    c.style.animationDuration = 2.2 + Math.random() * 2.2 + 's'; c.style.animationDelay = Math.random() * .8 + 's';
+    if (Math.random() < .4) c.style.borderRadius = '50%';
+    document.body.appendChild(c); setTimeout(() => c.remove(), 6000);
+  }
+}
+
+// ---------- the board: 20 cards built once per round, then only their classes change ----------
+let boardRound = null, boardImg = null, seenGone = new Set(), lastPhase = null;
+function faceHTML(c) {
+  if (c.kind === 'pts') return `<div class="face k-pts">${c.v}<small>POINTS</small></div>`;
+  if (c.kind === 'wild') return `<div class="face k-wild">WILD<small>MATCHES ANY CARD</small></div>`;
+  if (c.kind === 'take') return `<div class="face k-take">TAKE<small>STEAL A CARD</small></div>`;
+  if (c.kind === 'lose') return `<div class="face k-lose">LOSE A TURN</div>`;
+  return `<div class="face"></div>`;   // still face down: the projector isn't told what it is
+}
+// the face is filled in once the card is turned over
+function setFace(el, c) {
+  if (c.kind === 'hidden' || el.dataset.kind === fsCardLabel(c)) return;
+  el.dataset.kind = fsCardLabel(c);
+  el.querySelector('.face').outerHTML = faceHTML(c);
+}
+function buildBoard(s) {
+  const p = fsPuzzle(s) || {};
+  $('mid').innerHTML = `<div class="d-table"><div class="d-board" id="board"><img class="pic" id="pic" alt=""><div class="d-grid" id="grid">${
+    s.board.map(c => `<div class="card3d" id="c${c.n}"><div class="in"><div class="back"><span>${c.n}</span></div>${faceHTML(c)}</div></div>`).join('')}</div></div></div><div id="over"></div>`;
+  boardRound = s.round; boardImg = null; seenGone = new Set(s.board.filter(c => c.gone).map(c => c.n));
+  // cards that were already gone when this screen opened just stay gone
+  seenGone.forEach(n => $('c' + n).classList.add('gone'));
+  setPic(p);
+}
+function setPic(p) {
+  if (boardImg === p.img) return; boardImg = p.img;
+  const im = $('pic'); im.removeAttribute('src');
+  if (p.img) PP.getImage(p.img).then(src => { if (boardImg === p.img && src) im.src = src; });
+}
+function updateBoard(s, fresh) {
+  if (boardRound !== s.round || !$('grid')) buildBoard(s);
+  setPic(fsPuzzle(s) || {});
+  const peek = ['pick', 'miss', 'lost', 'match'].includes(s.phase) ? s.flips : [];
+  for (const c of s.board) {
+    const el = $('c' + c.n); if (!el) continue;
+    setFace(el, c);
+    if (c.gone && !seenGone.has(c.n)) {
+      seenGone.add(c.n);
+      // a matched card shows its face, then lifts away to uncover the picture
+      if (s.phase === 'solved' && !s.flips.includes(c.n) && s.result && s.result.kind !== 'match') { el.classList.add('going'); el.style.animationDelay = (Math.random() * .5) + 's'; el.style.animationDuration = '.9s'; }
+      else { el.classList.add('up', 'hit', 'going'); }
+      setTimeout(() => { el.classList.add('gone'); el.classList.remove('going'); }, s.phase === 'solved' ? 1800 : 1800);
+      continue;
+    }
+    if (!c.gone && seenGone.has(c.n)) { seenGone.delete(c.n); el.className = 'card3d'; el.style.animationDelay = ''; }   // undo
+    if (c.gone) continue;
+    el.classList.toggle('up', peek.includes(c.n));
+    el.classList.toggle('miss', s.phase === 'miss' && peek.includes(c.n));
+    el.classList.remove('hit');
+  }
+  $('board').classList.toggle('solved', s.phase === 'solved');
+  // banners: what just happened, the solving team's countdown, the answer at the end
+  let over = '';
+  const p = fsPuzzle(s) || {};
+  if (s.phase === 'solve') {
+    const t = s.teams.find(x => x.id === s.solver);
+    over = `<div class="d-solve" style="${teamStyle(t)}"><div class="lbl">SOLVE IT</div><div class="who">${esc(t ? t.name : '')}</div><div class="count" id="count"></div></div>`;
+  } else if (s.phase === 'solved') {
+    over = `<div class="d-banner answer">${esc(p.answer || '')}${s.result && s.result.kind === 'solved' ? `<small>${esc(fsResultText(s))}</small>` : ''}</div>`;
+  } else if (s.phase === 'buzz') {
+    over = `<div class="d-banner">Board's clear!<small>BUZZ IN ON YOUR PHONE TO SOLVE</small></div>`;
+  } else if (['match', 'miss', 'lost'].includes(s.phase) && fresh) {
+    over = `<div class="d-banner" style="animation-delay:.45s;opacity:0;animation-fill-mode:forwards">${esc(fsResultText(s))}${s.phase === 'match' ? `<small>SOLVE IT, OR PICK TWO MORE</small>` : s.phase === 'lost' ? '' : ''}</div>`;
+  }
+  if (over !== lastOver || fresh) { $('over').innerHTML = over; lastOver = over; }
+  if (s.phase === 'match' && fresh) setTimeout(() => { if (PP.state && PP.state.phase === 'match' && $('over')) { const b = $('over').querySelector('.d-banner'); if (b) b.style.transition = 'opacity .4s', b.style.opacity = '0'; } }, 3200);
+}
+let lastOver = '';
+
+// ---------- the rest of the screen ----------
+let lastTeams = '', lastScores = {};
+function renderTeams(s) {
+  const show = !['lobby', 'final'].includes(s.phase);
+  const html = show ? s.teams.map(t => {
+    const pot = fsPot(s, t.id), playing = ['pick', 'match', 'miss', 'lost', 'solve', 'buzz'].includes(s.phase);
+    return `<div class="d-team${s.turn === t.id && ['pick', 'match', 'miss', 'lost'].includes(s.phase) ? ' turn' : ''}${s.phase === 'buzz' && s.locked.includes(t.id) ? ' locked' : ''}" id="t${t.id}" style="${teamStyle(t)}">
+      <div class="nm">${esc(t.name)}</div><div class="sc"><span>${t.score}</span></div><div class="pot">${playing && pot ? `+${pot} ON THE LINE` : ''}</div></div>`;
+  }).join('') : '';
+  if (html !== lastTeams) { $('teams').innerHTML = html; lastTeams = html; }
+  for (const t of s.teams) {
+    const before = lastScores[t.id];
+    if (before != null && t.score > before) {
+      const el = $('t' + t.id);
+      if (el) { el.querySelector('.sc span').classList.add('bump'); const d = document.createElement('div'); d.className = 'd-delta'; d.textContent = '+' + (t.score - before); el.appendChild(d); }
+    }
+    lastScores[t.id] = t.score;
+  }
+}
+let lobbyUrl = null;
+function renderLobby(s) {
+  if (lobbyUrl !== s.joinUrl || !$('qr')) {
+    lobbyUrl = s.joinUrl;
+    $('mid').innerHTML = `<div class="d-lobby"><div><h1>FLIP <b>SIDE</b></h1>
+      <p>Take turns flipping two cards. Make a match and the cards come off, showing part of a picture puzzle. Solve the puzzle to bank your points!</p>
+      <div class="d-fan">${['100', 'WILD', '500', 'TAKE', '300'].map((v, i) => `<div class="card3d${i % 2 ? ' up' : ''}"><div class="in"><div class="back"><span>${i + 1}</span></div><div class="face ${v === 'WILD' ? 'k-wild' : v === 'TAKE' ? 'k-take' : 'k-pts'}">${v}</div></div></div>`).join('')}</div></div>
+      <div class="d-join"><div id="qr"></div><div class="code">${esc(s.room || '')}</div><div class="url">${esc(s.joinUrl || '')}</div></div></div>`;
+    if (window.QRCode && s.joinUrl) new QRCode($('qr'), { text: s.joinUrl, width: 240, height: 240, colorDark: '#1d1a16', colorLight: '#ffffff' });
+    boardRound = null;
+  }
+}
+function renderFinal(s) {
+  const r = fsRanking(s), n = r.length;
+  $('mid').innerHTML = `<div class="d-final"><h1>Final standings</h1>${r.map((x, i) => `<div class="d-rank${x.rank === 1 ? ' first' : ''}" style="${teamStyle(x.team)};--i:${n - 1 - i}">
+    <div class="pos">${x.rank}</div><div class="nm">${esc(x.team.name)}</div><div class="sc">${x.team.score}</div></div>`).join('')}</div>`;
+  boardRound = null;
+}
+
+let lastEv = null, lastKey = '';
+function tickCount() {
+  const s = PP.state, el = $('count');
+  if (s && el && s.phase === 'solve') { const t = fsAnswerText(s); el.textContent = t; el.classList.toggle('out', t === 'TIME'); }
+}
+// countdown sounds: a tick every second while a team is solving
+let lastTickSec = null;
+function countdownSound() {
+  const s = PP.state; if (!s || s.phase !== 'solve' || !s.answerEndsAt) { lastTickSec = null; return; }
+  const left = (s.answerEndsAt - PP.now()) / 1000, sec = Math.ceil(left);
+  if (sec !== lastTickSec && lastTickSec != null) { if (sec <= 0) SFX.play('timeup'); else SFX.play(sec <= 3 ? 'tock' : 'tick'); }
+  lastTickSec = sec;
+}
+setInterval(() => { tickCount(); countdownSound(); }, 100);
+
+PP.on(s => {
+  $('conn').textContent = PP.status || (PP.connected ? '' : 'Connecting…');
+  if (!s) return;
+  const fresh = lastEv !== null && s.ev && s.ev.n !== lastEv;
+  const evType = fresh ? s.ev.type : null;
+  if (lastEv === null && s.ev) lastEv = s.ev.n;
+  if (fresh) { lastEv = s.ev.n; if (evType) SFX.play(evType); }
+  const p = fsPuzzle(s);
+  $('round').textContent = s.phase === 'lobby' || s.phase === 'final' || !p ? '' : `PUZZLE ${s.round}`;
+  const tt = s.teams.find(t => t.id === (s.phase === 'solve' ? s.solver : s.turn));
+  $('turn').textContent = tt && ['pick', 'match', 'miss', 'lost'].includes(s.phase) ? `${tt.name}'s turn` : '';
+  $('turn').style.cssText = tt ? teamStyle(tt) : '';
+  document.querySelector('.d-top .logo').style.visibility = s.phase === 'lobby' ? 'hidden' : '';
+  if (s.phase === 'lobby') renderLobby(s);
+  else if (s.phase === 'final') { if (lastPhase !== 'final' || evType === 'winner') renderFinal(s); }
+  else if (s.board.length) updateBoard(s, !!evType);
+  renderTeams(s);
+  if (evType === 'correct') confetti(120, ['#e9b52f', '#ffffff', teamColor(s.teams.find(t => t.id === (s.result || {}).team))]);
+  if (evType === 'winner') { confetti(220); setTimeout(() => confetti(160), 1800); }
+  if (evType === 'wrong' && $('board')) { const b = $('board'); b.classList.remove('fx-shake'); void b.offsetWidth; b.classList.add('fx-shake'); }
+  lastPhase = s.phase;
+  tickCount();
+});
+PP.connect();
+</script>
+</body>
+</html>

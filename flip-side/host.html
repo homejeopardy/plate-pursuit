@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flip Side · Host</title>
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body class="host-page">
+<div class="host">
+  <div class="host-head">
+    <div class="logo">FLIP <b>SIDE</b></div>
+    <span class="note" id="join"></span>
+    <div class="row"><button class="btn primary" id="openDisplay">Open projector window</button><button class="btn" id="openStage">Host script</button></div>
+  </div>
+
+  <div class="card">
+    <h2 id="nowTitle">Now playing</h2>
+    <div class="h-now">
+      <div><div class="h-pic"><img id="hPic" alt=""></div></div>
+      <div>
+        <div class="h-answer" id="hAnswer"></div>
+        <div class="h-hint" id="hHint"></div>
+        <div class="h-status" id="hStatus"></div>
+        <div class="h-result" id="hResult"></div>
+        <div class="row" style="margin-top:10px" id="controls"></div>
+        <div class="h-board" id="hBoard"></div>
+        <div class="note" style="margin-top:6px">Click a card to flip it for the team whose turn it is (when they call numbers out loud). Faces are shown small for you only.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Teams <span class="note">(play goes left to right in this order; phones join by picking their team)</span></h2>
+    <div class="h-teams" id="teams"></div>
+    <div class="row" style="margin-top:10px">
+      <input id="newTeam" class="text-in" placeholder="Add a team" style="flex:1">
+      <button class="btn" id="addTeam">Add</button>
+      <button class="btn" id="defaultTeams">Default teams</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Game</h2>
+    <div class="row">
+      <button class="btn" data-a="lobby">Show join screen <kbd>⌃⇧J</kbd></button>
+      <button class="btn primary" data-a="next">Next puzzle <kbd>⌃⇧N</kbd></button>
+      <button class="btn gold" data-a="final">Final standings <kbd>⌃⇧E</kbd></button>
+      <button class="btn" data-a="theme">Play theme ♪</button>
+      <label class="check"><input type="checkbox" id="shuffle"> Shuffle puzzles</label>
+      <button class="btn bad" id="newGame">New game…</button>
+    </div>
+    <div class="settings" style="margin-top:12px">
+      <label>Seconds to answer <input class="text-in" type="number" min="0" data-s="answerSeconds"></label>
+      <label>Solve bonus <input class="text-in" type="number" min="0" step="50" data-s="solveBonus"></label>
+      <label>Two-wild bonus <input class="text-in" type="number" min="0" step="50" data-s="wildBonus"></label>
+      <label>Seconds cards stay up <input class="text-in" type="number" min="1" data-s="peekSeconds"></label>
+    </div>
+    <p class="note" style="margin-bottom:0">Board: 20 cards. Seven pairs of points (100 to 700), a TAKE pair (steals the biggest card another team matched this puzzle), a LOSE A TURN pair (the cards come off, then the turn passes) and two WILD cards (a wild matches any card, and that card's twin comes off too). Only the team that solves banks its matches, plus the solve bonus. If the board is cleared without a solve, every team can buzz in.</p>
+  </div>
+
+  <div class="card">
+    <h2>Puzzles <span class="note" id="pzCount"></span></h2>
+    <div class="h-add">
+      <label class="preview" id="pv" title="Choose a picture">Choose picture<input type="file" accept="image/*" id="file" hidden></label>
+      <input class="text-in" id="ansIn" placeholder="Answer (e.g. Head over heels)">
+      <input class="text-in" id="hintIn" placeholder="Hint for you (optional)">
+      <button class="btn primary" id="addPz">Add puzzle</button>
+    </div>
+    <p class="note">Pictures you add are kept in this browser on this computer and sent to the projector when they're played. Click a picture to play it now.</p>
+    <div class="row" style="margin-bottom:10px">
+      <input class="text-in" id="search" placeholder="Search answers" style="flex:1;max-width:280px">
+      <button class="btn small" data-a="markUnused">Mark all unplayed</button>
+      <button class="btn small" data-a="restorePuzzles">Bring back deleted starter puzzles</button>
+    </div>
+    <div class="h-puzzles" id="puzzles"></div>
+    <p class="note">Starter pictures: Reader's Digest ("28 Rebus Puzzles That Are Almost Impossible to Solve") and ESL Vault printable rebus sheets.</p>
+  </div>
+
+  <div class="card">
+    <h2>Shortcuts <span class="note">(also work while the projector window is in front)</span></h2>
+    <div class="note">⌃⇧G go (next step) · ⌃⇧V solve · ⌃⇧A pick again · ⌃⇧C correct · ⌃⇧X wrong · ⌃⇧P pass turn · ⌃⇧R reveal puzzle · ⌃⇧U undo · ⌃⇧N next puzzle · ⌃⇧J join screen · ⌃⇧E final standings</div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script src="starters.js?v=1"></script>
+<script src="net.js?v=1"></script>
+<script src="engine.js?v=1"></script>
+<script>
+const $ = id => document.getElementById(id);
+const act = (type, data) => {
+  const s = PP.state;
+  if (type === 'next' && s && s.puzzles.every((p, i) => s.used.includes(p.id) || i === s.cur)) { toast('Every puzzle has been played. Click "Mark all unplayed" in the Puzzles list.'); return Promise.resolve({ ok: false }); }
+  return PP.act(type, data);
+};
+let toastT = null;
+function toast(t) { $('toast').textContent = t; clearTimeout(toastT); toastT = setTimeout(() => { $('toast').textContent = ''; }, 2200); }
+PP.startHost();
+
+const base = () => location.href.split(/[?#]/)[0].replace(/[^/]*$/, '');
+$('openDisplay').onclick = () => window.open(base() + 'display.html?room=' + PP.room, 'flipside-projector', 'width=1280,height=720');
+$('openStage').onclick = () => window.open(base() + 'stage.html?room=' + PP.room, 'flipside-stage', 'width=900,height=800');
+document.querySelectorAll('[data-a]').forEach(b => b.onclick = () => act(b.dataset.a));
+$('newGame').onclick = () => {
+  const keep = confirm('Start a new game?\n\nOK = keep these teams (scores go to 0)\nCancel = choose again');
+  if (keep) return act('newGame', { keepTeams: true });
+  if (confirm('Start a new game with the four default teams instead?')) act('newGame', { keepTeams: false });
+};
+$('addTeam').onclick = () => { const v = $('newTeam').value.trim(); if (v) { act('addTeam', { name: v }); $('newTeam').value = ''; } };
+$('newTeam').onkeydown = e => { if (e.key === 'Enter') $('addTeam').click(); };
+$('defaultTeams').onclick = () => { if (confirm('Replace the teams with the four default teams?')) act('defaultTeams'); };
+$('shuffle').onchange = e => act('shuffle', { on: e.target.checked });
+document.querySelectorAll('[data-s]').forEach(i => i.onchange = () => act('settings', { [i.dataset.s]: i.value }));
+
+// ---------- adding a puzzle ----------
+let picked = null;
+async function fileChange(e) {
+  const f = e.target.files[0]; if (!f) return;
+  try { picked = await FSImages.fromFile(f); $('pv').innerHTML = `<img src="${picked}" alt=""><input type="file" accept="image/*" id="file" hidden>`; $('file').onchange = fileChange; }
+  catch (err) { toast("That file isn't a picture this browser can read"); }
+  $('ansIn').focus();
+}
+$('file').onchange = fileChange;
+$('addPz').onclick = async () => {
+  const a = $('ansIn').value.trim();
+  if (!picked) return toast('Choose a picture first');
+  if (!a) { $('ansIn').focus(); return toast('Type the answer'); }
+  const id = 'up:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  try { await FSImages.put(id, picked); } catch (e) { return toast("Couldn't save the picture in this browser"); }
+  act('addPuzzle', { img: id, answer: a, hint: $('hintIn').value });
+  picked = null; $('ansIn').value = ''; $('hintIn').value = '';
+  $('pv').innerHTML = `Choose picture<input type="file" accept="image/*" id="file" hidden>`; $('file').onchange = fileChange;
+  toast('Puzzle added');
+};
+$('ansIn').onkeydown = $('hintIn').onkeydown = e => { if (e.key === 'Enter') $('addPz').click(); };
+$('search').oninput = () => render(PP.state);
+
+// ---------- what Go does at each step ----------
+function goStep(s) {
+  if (!s) return;
+  if (s.phase === 'lobby' || s.phase === 'solved') return act('next');
+  if (s.phase === 'miss' || s.phase === 'lost') return act('hide');
+  if (s.phase === 'match') return act('again');
+}
+function runKey(k) {
+  const s = PP.state;
+  if (k === 'go') return goStep(s);
+  if (k === 'solve') return act('solve');
+  act(k);
+}
+document.addEventListener('keydown', e => { const n = fsKeyName(e); if (n) { e.preventDefault(); runKey(n); } });
+fsOnForwardedKey(runKey);
+
+// ---------- rendering ----------
+const PHASE = { lobby: 'Join screen', pick: 'Picking', match: 'Match!', miss: 'No match', lost: 'Lose a turn', solve: 'Solving', buzz: 'Board clear: buzz in', solved: 'Puzzle over', final: 'Final standings' };
+const imgSrc = {};
+function picInto(img, id) {
+  if (!id) { img.removeAttribute('src'); return; }
+  if (imgSrc[id]) { if (img.getAttribute('src') !== imgSrc[id]) img.src = imgSrc[id]; return; }
+  PP.getImage(id).then(src => { if (src) { imgSrc[id] = src; if (img.dataset.want === id) img.src = src; } });
+  img.dataset.want = id;
+}
+let lastPzHTML = '';
+function render(s) {
+  if (!s) return;
+  $('join').innerHTML = `Room <b>${esc(s.room || PP.room || '')}</b> · phones join at ${esc(s.joinUrl || '')}${PP.status ? ' · ' + esc(PP.status) : ''}`;
+  const p = s.puzzles[s.cur];
+  $('nowTitle').textContent = p && s.phase !== 'lobby' && s.phase !== 'final' ? `Puzzle ${s.round}` : 'Now playing';
+  const pic = $('hPic'); pic.dataset.want = p ? p.img : ''; picInto(pic, p && s.phase !== 'lobby' && s.phase !== 'final' ? p.img : null);
+  const showP = p && !['lobby', 'final'].includes(s.phase);
+  $('hAnswer').textContent = showP ? p.answer : s.phase === 'final' ? 'Final standings' : 'Press Next puzzle to start';
+  $('hHint').textContent = showP && p.hint ? 'Hint: ' + p.hint : '';
+  const who = s.teams.find(t => t.id === (s.phase === 'solve' ? s.solver : s.turn));
+  let st = PHASE[s.phase] || s.phase;
+  if (who && ['pick', 'match', 'miss', 'lost'].includes(s.phase)) st = `<span class="tm" style="${teamStyle(who)}">${esc(who.name)}</span> ${s.phase === 'pick' ? (s.flips.length ? 'picks a second card' : 'picks two cards') : esc(PHASE[s.phase])}`;
+  if (s.phase === 'solve' && who) st = `<span class="tm" style="${teamStyle(who)}">${esc(who.name)}</span> is solving <span class="h-count" id="hCount"></span>`;
+  if (s.phase === 'buzz' && s.locked.length) st += ` · already tried: ${s.locked.map(id => esc(teamName(s, id))).join(', ')}`;
+  $('hStatus').innerHTML = st;
+  $('hResult').textContent = (fsResultText(s) || '') + (s.undoLabel ? `   (Undo: ${s.undoLabel})` : '');
+  // controls for this step
+  const B = (a, label, cls = '', key = '') => `<button class="btn ${cls}" data-c="${a}">${label}${key ? ` <kbd>${key}</kbd>` : ''}</button>`;
+  let c = '';
+  if (s.phase === 'lobby') c = B('next', 'Start first puzzle', 'primary', '⌃⇧G');
+  if (s.phase === 'pick') c = B('pass', 'Pass turn', '', '⌃⇧P');
+  if (s.phase === 'match') c = B('solve', 'Solve it', 'gold', '⌃⇧V') + (fsLeft(s) ? B('again', 'Pick two more', 'primary', '⌃⇧G') : '') + B('pass', 'Pass turn', '', '⌃⇧P');
+  if (s.phase === 'miss' || s.phase === 'lost') c = B('hide', 'Next team now', 'primary', '⌃⇧G');
+  if (s.phase === 'solve') c = B('correct', 'Correct', 'good', '⌃⇧C') + B('wrong', 'Wrong', 'bad', '⌃⇧X');
+  if (s.phase === 'buzz') c = s.teams.filter(t => !s.locked.includes(t.id)).map(t => `<button class="btn" style="border-color:${teamColor(t)}" data-solve="${t.id}">${esc(t.name)} buzzed</button>`).join('');
+  if (s.phase === 'solved') c = B('next', 'Next puzzle', 'primary', '⌃⇧G') + B('final', 'Final standings', 'gold', '⌃⇧E');
+  if (['pick', 'match', 'miss', 'lost', 'buzz', 'solve'].includes(s.phase)) c += B('reveal', 'Reveal puzzle (no points)', '', '⌃⇧R');
+  c += `<button class="btn" data-c="undo"${s.undoLabel ? '' : ' disabled'}>Undo <kbd>⌃⇧U</kbd></button>`;
+  $('controls').innerHTML = c;
+  $('controls').querySelectorAll('[data-c]').forEach(b => b.onclick = () => act(b.dataset.c));
+  $('controls').querySelectorAll('[data-solve]').forEach(b => b.onclick = () => act('solve', { teamId: Number(b.dataset.solve) }));
+  // the board
+  const playing = s.board.length && !['lobby', 'final'].includes(s.phase);
+  $('hBoard').innerHTML = playing ? s.board.map(cd => {
+    const up = s.flips.includes(cd.n) && ['pick', 'miss', 'lost', 'match'].includes(s.phase);
+    return `<button class="${cd.gone ? 'gone' : ''}${up ? ' up' : ''}" data-n="${cd.n}"${cd.gone || s.phase !== 'pick' || up ? ' disabled' : ''}>${cd.n}<small>${fsCardLabel(cd)}</small></button>`;
+  }).join('') : '';
+  $('hBoard').querySelectorAll('button[data-n]').forEach(b => b.onclick = () => act('flip', { n: Number(b.dataset.n) }));
+  // teams
+  $('teams').innerHTML = s.teams.map((t, i) => {
+    const pot = fsPot(s, t.id);
+    return `<div class="h-team${s.turn === t.id && ['pick', 'match', 'miss', 'lost'].includes(s.phase) ? ' turn' : ''}" style="${teamStyle(t)}">
+      <span class="sw"></span>
+      <span class="nm">${esc(t.name)}<span class="dot${s.online && s.online[t.id] ? ' on' : ''}" title="${s.online && s.online[t.id] ? 'Phone connected' : 'No phone'}"></span>${pot ? `<small>+${pot} this puzzle</small>` : ''}</span>
+      <span class="row">${['pick', 'match'].includes(s.phase) && s.turn !== t.id ? `<button class="btn small" data-turn="${t.id}">Their turn</button>` : ''}
+        <button class="btn small" data-score="${t.id}" data-d="-100">−100</button><button class="btn small" data-score="${t.id}" data-d="100">+100</button></span>
+      <span class="sc">${t.score}</span>
+      <span class="row"><button class="btn small" data-move="${t.id}" data-dir="-1"${i ? '' : ' disabled'}>←</button><button class="btn small" data-move="${t.id}" data-dir="1"${i < s.teams.length - 1 ? '' : ' disabled'}>→</button>
+        <button class="btn small" data-rename="${t.id}">Rename</button><button class="btn small" data-remove="${t.id}">✕</button></span></div>`;
+  }).join('') || '<div class="note">No teams yet.</div>';
+  const T = $('teams');
+  T.querySelectorAll('[data-turn]').forEach(b => b.onclick = () => act('setTurn', { teamId: Number(b.dataset.turn) }));
+  T.querySelectorAll('[data-score]').forEach(b => b.onclick = () => act('score', { teamId: Number(b.dataset.score), delta: Number(b.dataset.d) }));
+  T.querySelectorAll('[data-move]').forEach(b => b.onclick = () => act('moveTeam', { teamId: Number(b.dataset.move), dir: Number(b.dataset.dir) }));
+  T.querySelectorAll('[data-rename]').forEach(b => b.onclick = () => { const t = s.teams.find(x => x.id === Number(b.dataset.rename)); const n = prompt('Team name', t.name); if (n) act('rename', { teamId: t.id, name: n }); });
+  T.querySelectorAll('[data-remove]').forEach(b => b.onclick = () => { const t = s.teams.find(x => x.id === Number(b.dataset.remove)); if (confirm(`Remove ${t.name}?`)) act('removeTeam', { teamId: t.id }); });
+  // settings
+  $('shuffle').checked = s.shuffle !== false;
+  document.querySelectorAll('[data-s]').forEach(i => { if (document.activeElement !== i) i.value = s.settings[i.dataset.s]; });
+  // puzzle list
+  const q = $('search').value.trim().toLowerCase();
+  const used = s.puzzles.filter(x => s.used.includes(x.id)).length;
+  $('pzCount').textContent = `(${s.puzzles.length} puzzles, ${used} played)`;
+  const curId = p ? p.id : null;
+  const html = s.puzzles.map((x, i) => !q || x.answer.toLowerCase().includes(q) ? `<div class="h-pz${s.used.includes(x.id) ? ' used' : ''}${x.id === curId && !['lobby', 'final'].includes(s.phase) ? ' cur' : ''}">
+    <div class="th" data-play="${i}" title="Play this puzzle now"><img data-img="${esc(x.img)}" alt="" loading="lazy"></div>
+    <div class="ans">${esc(x.answer)}${x.hint ? `<small>${esc(x.hint)}</small>` : ''}</div>
+    <div class="bar"><button class="btn small" data-edit="${esc(x.id)}">Edit</button><button class="btn small" data-up="${esc(x.id)}" title="Move earlier">↑</button><button class="btn small" data-down="${esc(x.id)}" title="Move later">↓</button><button class="btn small" data-del="${esc(x.id)}">Delete</button></div></div>` : '').join('');
+  if (html !== lastPzHTML) {
+    lastPzHTML = html; const L = $('puzzles'); L.innerHTML = html;
+    L.querySelectorAll('img[data-img]').forEach(im => { const id = im.dataset.img; im.dataset.want = id; picInto(im, id); });
+    L.querySelectorAll('[data-play]').forEach(b => b.onclick = () => { const x = PP.state.puzzles[Number(b.dataset.play)]; if (['pick', 'match', 'miss', 'lost', 'solve', 'buzz'].includes(PP.state.phase) && !confirm(`Stop this puzzle and play "${x.answer}" now?`)) return; act('load', { index: Number(b.dataset.play) }); });
+    L.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => { const x = PP.state.puzzles.find(y => y.id === b.dataset.edit); const a = prompt('Answer', x.answer); if (a == null) return; const h = prompt('Hint for you (optional)', x.hint || ''); act('editPuzzle', { id: x.id, answer: a, hint: h == null ? x.hint : h }); });
+    L.querySelectorAll('[data-up]').forEach(b => b.onclick = () => act('movePuzzle', { id: b.dataset.up, dir: -1 }));
+    L.querySelectorAll('[data-down]').forEach(b => b.onclick = () => act('movePuzzle', { id: b.dataset.down, dir: 1 }));
+    L.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { const x = PP.state.puzzles.find(y => y.id === b.dataset.del); if (confirm(`Delete "${x.answer}"?`)) { act('removePuzzle', { id: x.id }); if (/^up:/.test(x.img)) FSImages.del(x.img); } });
+  }
+  tickCount();
+}
+function tickCount() { const s = PP.state, el = $('hCount'); if (s && el) el.textContent = fsAnswerText(s); }
+setInterval(tickCount, 200);
+PP.on(render);
+</script>
+</body>
+</html>
