@@ -340,10 +340,7 @@ function createEngine(opts = {}) {
     clearTimeout(answerTimer); answerTimer = null;
     if (S.phase !== 'buzzed') { S.answerEndsAt = null; return; }
     if (!S.answerEndsAt) return;
-    const who = S.buzzed;
-    answerTimer = setTimeout(() => {
-      if (S.phase === 'buzzed' && S.buzzed === who) { record('timeout'); actions.wrong(); armAnswer(); changed(); }
-    }, Math.max(0, S.answerEndsAt - now()));
+    // The countdown is only a guide: when it runs out the screens show TIME and the host still decides Correct or Wrong.
   }
 
   // ---------- undo ----------

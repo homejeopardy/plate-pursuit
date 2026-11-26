@@ -288,6 +288,8 @@ function ppForwardKeys() {
 }
 function ppOnForwardedKey(fn) { if (_keyChan) _keyChan.onmessage = e => { if (e.data && (e.data.room || null) === (PP.room || null)) fn(e.data.key); }; }
 function ppFinalLeft(s) { return s.fin && s.fin.endsAt ? Math.max(0, (s.fin.endsAt - PP.now()) / 1000) : null; }
+// countdown text: seconds left, or TIME once it runs out (the host still marks the answer)
+function ppAnswerText(s) { const l = ppAnswerLeft(s); return l == null ? '' : l > 0 ? String(Math.ceil(l)) : 'TIME'; }
 function ppAnswerLeft(s) { return s.answerEndsAt ? Math.max(0, (s.answerEndsAt - PP.now()) / 1000) : null; }
 function ppFraction(s) { return Math.max(0, 1 - ppElapsed(s) / s.settings.drainSeconds); }
 function ppSpeedLeft(s) { return s.speed && s.speed.endsAt ? Math.max(0, (s.speed.endsAt - PP.now()) / 1000) : (s.settings.speedSeconds); }

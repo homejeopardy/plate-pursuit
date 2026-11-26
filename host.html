@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Host</title>
-<link rel="stylesheet" href="style.css?v=30">
+<link rel="stylesheet" href="style.css?v=31">
 </head>
 <body class="host-page">
 <div class="host">
@@ -98,11 +98,11 @@
   </div>
 </div>
 
-<script src="mode.js?v=30"></script>
+<script src="mode.js?v=31"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="engine.js?v=30"></script>
-<script src="states.js?v=30"></script>
-<script src="shared.js?v=30"></script>
+<script src="engine.js?v=31"></script>
+<script src="states.js?v=31"></script>
+<script src="shared.js?v=31"></script>
 <script>
 const $ = id => document.getElementById(id);
 const act = PP.act;
@@ -271,7 +271,7 @@ function render(s) {
   if (sk !== renderedSettings && !$('settings').contains(document.activeElement)) {
     renderedSettings = sk;
     const F = (k, label) => `<label class="field">${label}<input type="number" min="0" data-set="${k}" value="${s.settings[k]}" style="width:110px"></label>`;
-    $('settings').innerHTML = F('maxPoints', 'Points at start') + F('minPoints', 'Lowest points') + F('drainSeconds', 'Seconds to drain') + F('answerSeconds', 'Seconds to answer (0 = no limit)')
+    $('settings').innerHTML = F('maxPoints', 'Points at start') + F('minPoints', 'Lowest points') + F('drainSeconds', 'Seconds to drain') + F('answerSeconds', 'Answer countdown, seconds (0 = none; you still mark it)')
       + F('speedPoints', 'Speed-round points each') + F('speedSeconds', 'Speed-round seconds') + F('finalSeconds', 'Final plate: seconds to type');
     $('settings').querySelectorAll('[data-set]').forEach(inp => inp.onchange = () => act('settings', { [inp.dataset.set]: inp.value }));
   }
@@ -282,7 +282,7 @@ function tick() {
   if (s.phase === 'running') $('hBig').textContent = ppValue(s) + ' pts';
   else if (s.phase === 'speed') $('hBig').textContent = Math.ceil(ppSpeedLeft(s)) + 's left';
   else if (s.phase === 'paused') $('hBig').textContent = 'Paused at ' + ppValue(s) + ' pts';
-  else if (s.phase === 'buzzed' && s.answerEndsAt) $('hBig').textContent = Math.ceil(ppAnswerLeft(s)) + 's to answer';
+  else if (s.phase === 'buzzed' && s.answerEndsAt) $('hBig').textContent = ppAnswerLeft(s) > 0 ? Math.ceil(ppAnswerLeft(s)) + 's to answer' : "Time's up: Correct or Wrong?";
   else if (s.phase === 'fanswer' && s.fin.endsAt) $('hBig').textContent = Math.ceil(ppFinalLeft(s)) + 's to answer';
   else $('hBig').textContent = '';
 }

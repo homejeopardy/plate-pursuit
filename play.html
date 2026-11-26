@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0e1726">
 <title>Plate Pursuit · Buzzer</title>
-<link rel="stylesheet" href="style.css?v=30">
+<link rel="stylesheet" href="style.css?v=31">
 </head>
 <body class="phone-page">
 <div class="phone" id="app"></div>
-<script src="mode.js?v=30"></script>
+<script src="mode.js?v=31"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="shared.js?v=30"></script>
+<script src="shared.js?v=31"></script>
 <script>
 const app = document.getElementById('app');
 if (PP.needRoom('JOIN THE GAME')) throw new Error('waiting for room code');
@@ -143,7 +143,7 @@ function render(s) {
     case 'fanswer': msg = '<b>Final plate!</b> Type your answer.'; break;
     case 'fjudge': msg = 'Final plate: the host is checking answers.'; break;
     case 'buzzed':
-      if (s.buzzed === me.id) { msg = '<b>You buzzed first. Say your answer out loud!</b>'; mine = true; label = s.answerEndsAt ? String(Math.ceil(ppAnswerLeft(s))) : 'YOU!'; }
+      if (s.buzzed === me.id) { msg = '<b>You buzzed first. Say your answer out loud!</b>'; mine = true; label = s.answerEndsAt ? ppAnswerText(s) : 'YOU!'; }
       else msg = `${esc(teamName(s, s.buzzed))} is answering`;
       break;
     case 'revealed': {
@@ -258,7 +258,7 @@ function finalStatus(s) {
 PP.on(render);
 setInterval(() => { const s = PP.state, el = document.getElementById('fcd'); if (el && s && s.phase === 'fanswer') { const l = ppFinalLeft(s); el.textContent = l == null ? '' : Math.ceil(l) + 's'; } }, 200);
 // tick the answer countdown on the phone that buzzed
-setInterval(() => { const s = PP.state; if (s && s.phase === 'buzzed' && me && s.buzzed === me.id && document.getElementById('buzzLabel')) document.getElementById('buzzLabel').textContent = Math.ceil(ppAnswerLeft(s)); }, 100);
+setInterval(() => { const s = PP.state; if (s && s.phase === 'buzzed' && me && s.buzzed === me.id && document.getElementById('buzzLabel')) { const t = ppAnswerText(s); document.getElementById('buzzLabel').textContent = t; document.getElementById('buzz').classList.toggle('up', t === 'TIME'); } }, 100);
 if (me && me.id) start(); else { showJoin(); PP.connect(); }   // connect first so the team list shows
 </script>
 </body>
