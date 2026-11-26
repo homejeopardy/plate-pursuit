@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Host</title>
-<link rel="stylesheet" href="style.css?v=28">
+<link rel="stylesheet" href="style.css?v=29">
 </head>
 <body class="host-page">
 <div class="host">
@@ -92,17 +92,18 @@
       <div><kbd>⌃⇧L</kbd> lock final answers</div>
       <div><kbd>⌃⇧T</kbd> tie-breaker plate</div>
       <div><kbd>⌃⇧E</kbd> final standings</div>
-      <div><kbd>⌃⇧1</kbd>–<kbd>⌃⇧5</kbd> set up the speed round for team 1–5 (order of the Teams list)</div>
+      <div><kbd>⌃⇧1</kbd>–<kbd>⌃⇧4</kbd> pick team 1–4 for the speed round (order of the Teams list)</div>
+      <div><kbd>⌃⇧5</kbd> send the speed round to the board (same as ⌃⇧S)</div>
       <div><kbd>⌃⇧K</kbd> stop the speed-round clock</div>
       <div><kbd>⌃⇧D</kbd> double points on or off for the plate that's up</div></div>
   </div>
 </div>
 
-<script src="mode.js?v=28"></script>
+<script src="mode.js?v=29"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="engine.js?v=28"></script>
-<script src="states.js?v=28"></script>
-<script src="shared.js?v=28"></script>
+<script src="engine.js?v=29"></script>
+<script src="states.js?v=29"></script>
+<script src="shared.js?v=29"></script>
 <script>
 const $ = id => document.getElementById(id);
 const act = PP.act;
@@ -300,14 +301,21 @@ function goStep(s) {   // the one-button "next step"
   if (s.phase === 'revealed' && s.used.length >= s.puzzles.length) return act('final');   // no plates left
   if (['lobby', 'revealed', 'speedover'].includes(s.phase)) return act('next');
 }
+// a short note at the bottom of the control page (team picks from the deck have nothing else to show)
+let toastTimer = null;
+function toast(msg) {
+  let el = document.getElementById('toast');
+  if (!el) { el = document.createElement('div'); el.id = 'toast'; el.className = 'toast'; document.body.appendChild(el); }
+  el.textContent = msg; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 4000);
+}
 function runKey(name) {
   const s = PP.state; if (!s || !name) return;
   if (name === 'go') goStep(s);
   else if (name === 'double') { if (s.cur != null) act('toggleDouble', { index: s.cur }); }   // the plate up now
-  else if (name === 'speed') { if ($('speedTeam').value) act('speedReady', { teamId: $('speedTeam').value }); }
-  else if (/^speed\d$/.test(name)) {   // speed round for team 1–5 (in the order of the Teams list)
-    const t = s.teams[Number(name.slice(5)) - 1]; if (!t) return;
-    $('speedTeam').value = String(t.id); act('speedReady', { teamId: t.id });
+  else if (name === 'speed') { if ($('speedTeam').value) { act('speedReady', { teamId: $('speedTeam').value }); toast(`Speed round for ${teamName(s, Number($('speedTeam').value))} is on the board.`); } }
+  else if (/^pick\d$/.test(name)) {   // pick team 1–4 for the speed round (Teams-list order); nothing shows until it's sent
+    const t = s.teams[Number(name.slice(4)) - 1]; if (!t) return;
+    $('speedTeam').value = String(t.id); toast(`Speed round: ${t.name} picked. Press SEND TO BOARD (⌃⇧5) to put it on the screen.`);
   }
   else act(name);
 }
