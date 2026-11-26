@@ -10,7 +10,8 @@ function createEngine(opts = {}) {
   const DEFAULT_SETTINGS = { answerSeconds: 15, solveBonus: 500, peekSeconds: 3, wildBonus: 500, wrongPenalty: 200 };
   // 20 cards: 7 pairs of points, a TAKE pair, a LOSE A TURN pair, and two WILD cards
   const POINTS = [100, 200, 300, 400, 500, 600, 700];
-  const STARTERS = (root.FS_STARTERS || []).map((p, i) => ({ id: 's' + i, ...p }));
+  const STARTERS = (root.FS_STARTERS || []).map((p, i) => p && { id: 's' + i, ...p }).filter(Boolean);
+  const retired = id => /^s\d+$/.test(id) && !STARTERS.some(p => p.id === id);   // a starter set to null in starters.js
 
   function defaultTeams(firstId) { return DEFAULT_TEAMS.map(([name, color], i) => ({ id: firstId + i, name, score: 0, color })); }
   function freshState() {
@@ -26,7 +27,8 @@ function createEngine(opts = {}) {
     const saved = opts.load && opts.load();
     if (saved) S = { ...S, ...saved, settings: { ...DEFAULT_SETTINGS, ...(saved.settings || {}) } };
   } catch (e) {}
-  // starter puzzles added in a later version show up in old saves
+  // retired starters leave old saves; starter puzzles added in a later version show up in them
+  S.puzzles = S.puzzles.filter(p => !retired(p.id));
   for (const p of STARTERS) if (!S.puzzles.some(q => q.id === p.id) && !(S.removed || []).includes(p.id)) S.puzzles.push({ ...p });
   S.undoLabel = null;
 

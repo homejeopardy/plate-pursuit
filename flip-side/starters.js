@@ -1,3 +1,4 @@
+// Starter picture puzzles. Ids are 's' + position, so never reorder or delete: retire one by replacing it with null.
 // Starter picture puzzles. Images: Reader's Digest (rd-*) and ESL Vault (esl-*).
 var FS_STARTERS = [
 {
@@ -255,11 +256,7 @@ var FS_STARTERS = [
 "answer": "Microscope",
 "src": "esl"
 },
-{
-"img": "images/esl-10-02.jpg",
-"answer": "One night stand",
-"src": "esl"
-},
+null /* retired: not for class. Keep the slot so later ids (s52…) don't shift. */,
 {
 "img": "images/esl-10-03.jpg",
 "answer": "Eye sockets",
