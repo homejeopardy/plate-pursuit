@@ -12,6 +12,15 @@ const PP = (() => {
   const setStatus = t => { if (t !== status) { status = t; emit(); } };
   const receive = snap => { state = snap; offset = snap.serverNow - Date.now(); connected = true; status = null; emit(); };
   const safe = f => { try { return f(); } catch (e) { return null; } };
+  // Every host update is numbered. A screen can get the same update twice (instantly inside the browser, and later
+  // through the internet relay), so an older copy that turns up after a newer one is thrown away instead of
+  // flicking the screen back to old scores and replaying sounds.
+  let lastSid = null, lastSeq = 0;
+  const fresh = snap => {
+    if (snap.sid && snap.sid === lastSid && snap.seq <= lastSeq) return false;
+    if (snap.sid) { lastSid = snap.sid; lastSeq = snap.seq; }
+    return true;
+  };
 
   // ---------- local server mode (node server.js) ----------
   let es = null;
@@ -38,11 +47,12 @@ const PP = (() => {
   const relays = [];                 // host: one client per relay
   const seen = {};                   // teamId -> last time that phone said hello
   const baseUrl = () => location.href.split(/[?#]/)[0].replace(/[^/]*$/, '');
+  const hostSid = rid(); let hostSeq = 0;
   function hostSnapshot() {
     const online = {}, cutoff = Date.now() - 25000;
     for (const id in seen) if (seen[id] > cutoff) online[id] = true;
     const joinUrl = baseUrl() + 'play.html?room=' + room;
-    return { ...engine.state, serverNow: Date.now(), online, joinUrl, joinUrls: [joinUrl], room, hostOnline: relays.some(r => r.connected) };
+    return { ...engine.state, serverNow: Date.now(), online, joinUrl, joinUrls: [joinUrl], room, hostOnline: relays.some(r => r.connected), sid: hostSid, seq: ++hostSeq };
   }
   let queued = false;
   function broadcast() {
@@ -121,7 +131,7 @@ const PP = (() => {
     if (started) return; started = true;
     if (window.BroadcastChannel) {   // projector opened from the host on the same computer
       bc = new BroadcastChannel(PREFIX + room);
-      bc.onmessage = e => { if (e.data && e.data.snap) { lastHeard = Date.now(); receive(e.data.snap); } };
+      bc.onmessage = e => { if (e.data && e.data.snap) { lastHeard = Date.now(); if (fresh(e.data.snap)) receive(e.data.snap); } };
       bc.postMessage({ hello: 1 });
     }
     if (!window.mqtt) return setStatus("Couldn't load the connection library. Check the internet, then reload.");
@@ -164,6 +174,8 @@ const PP = (() => {
       if (t === topic('ping')) { lastHeard = Date.now(); offset = m.now - Date.now(); if (status && hostState === 'online' && state) { status = null; connected = true; emit(); } return; }
       if (t === topic('state')) {
         if (!m.snap) return;
+        lastHeard = Date.now();
+        if (!fresh(m.snap)) return;   // an older copy of something already shown
         const keepOffset = packet && packet.retain;      // a retained copy can be old: don't trust its clock
         const o = offset;
         lastHeard = Date.now();
