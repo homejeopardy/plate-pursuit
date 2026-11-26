@@ -75,6 +75,11 @@ function createEngine(opts = {}) {
     const c = S.board[n - 1];
     if (!c || c.gone || S.flips.includes(n)) return false;
     S.flips.push(n);
+    if (c.kind === 'lose') {   // a LOSE A TURN card comes off by itself as soon as it's turned over, and the turn ends
+      c.gone = true; c.by = S.turn; S.wildTwin = null;
+      S.result = { kind: 'match', team: S.turn, cards: ['LOSE A TURN'], effect: 'lose', points: 0 };
+      S.phase = 'lost'; S.hideAt = now() + S.settings.peekSeconds * 1000; fire('lose'); return true;
+    }
     if (S.flips.length < 2) { fire('flip'); return true; }
     const [a, b] = S.flips.map(k => S.board[k - 1]);
     const me = S.turn, won = [];

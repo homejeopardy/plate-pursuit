@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Flip Side · Host</title>
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=3">
 </head>
 <body class="host-page">
 <div class="host">
@@ -57,7 +57,7 @@
       <label>Wrong-answer penalty <input class="text-in" type="number" min="0" step="50" data-s="wrongPenalty"></label>
       <label>Seconds cards stay up <input class="text-in" type="number" min="1" data-s="peekSeconds"></label>
     </div>
-    <p class="note" style="margin-bottom:0">Board: 20 cards. Seven pairs of points (100 to 700), a TAKE pair (steals the biggest card another team matched this puzzle), a LOSE A TURN pair (the cards come off, then the turn passes) and two WILD cards (a wild matches any card, and that card's twin comes off too). Only the team that solves banks its matches, plus the solve bonus. If the board is cleared without a solve, every team can buzz in.</p>
+    <p class="note" style="margin-bottom:0">Board: 20 cards. Seven pairs of points (100 to 700), a TAKE pair (steals the biggest card another team matched this puzzle), two LOSE A TURN cards (turning one over ends your turn, and that card comes off) and two WILD cards (a wild matches any card, and that card's twin comes off too). Only the team that solves banks its matches, plus the solve bonus. If the board is cleared without a solve, every team can buzz in.</p>
   </div>
 
   <div class="card">
@@ -85,9 +85,9 @@
 </div>
 <div class="toast" id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="starters.js?v=2"></script>
-<script src="net.js?v=2"></script>
-<script src="engine.js?v=2"></script>
+<script src="starters.js?v=3"></script>
+<script src="net.js?v=3"></script>
+<script src="engine.js?v=3"></script>
 <script>
 const $ = id => document.getElementById(id);
 const act = (type, data) => {
