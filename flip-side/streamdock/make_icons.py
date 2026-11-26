@@ -91,9 +91,43 @@ control('pick-2-more', ['PICK 2', 'MORE'], FELT, CREAM, CREAM)
 control('pass-turn', ['PASS', 'TURN'], FELT, CREAM, CREAM)
 control('join-screen', ['JOIN', 'SCREEN'], FELT_D, GOLD)
 control('next-puzzle', ['NEXT', 'PUZZLE'], FELT, CREAM, GOLD)
-control('open-control', ['CONTROL'], CREAM, INK, INK, sub='OPEN')
-control('open-projector', ['PROJECTOR'], CREAM, INK, INK, sub='OPEN')
-control('open-script', ['SCRIPT'], CREAM, INK, INK, sub='OPEN')
+def star_key():   # final wager puzzle: a gold star
+    import math
+    im, d = base(FELT_D, GOLD)
+    cx, cy, R1, R2 = S / 2, 56, 34, 14
+    pts = [(cx + (R1 if k % 2 == 0 else R2) * math.sin(k * math.pi / 5), cy - (R1 if k % 2 == 0 else R2) * math.cos(k * math.pi / 5)) for k in range(10)]
+    d.polygon(pts, fill=GOLD)
+    f, sz = fit(d, ['FINAL WAGER'], 108, 22)
+    d.text((S / 2, 112), 'FINAL WAGER', font=f, fill=GOLD, anchor='mm')
+    save(im, 'final-wager')
+star_key()
+def theme_key():   # play the theme: two beamed music notes
+    im, d = base(FELT, CREAM)
+    for x in (50, 88):
+        d.ellipse([x - 15, 70, x + 5, 86], fill=GOLD)
+        d.line([(x + 3, 78), (x + 3, 34)], fill=GOLD, width=5)
+    d.polygon([(51, 32), (93, 24), (93, 34), (51, 42)], fill=GOLD)
+    d.text((S / 2, 113), 'THEME', font=font(26), fill=CREAM, anchor='mm')
+    save(im, 'theme')
+theme_key()
+TEAMS = [('CNSTTTNLWYR', '#c8322a'), ('SCNCEGY', '#2563c9'), ('GEHLTHCR', '#e07a10'), ('PJMKRNDMR', '#7a45c2')]
+def team_key(i, name, color):   # "this team buzzed in", in the team's colour, by its place in the team list
+    im, d = base(color, CREAM)
+    d.text((S / 2, 30), f'TEAM {i}', font=font(17), fill=CREAM, anchor='mm')
+    f, sz = fit(d, [name], 104, 26)
+    d.text((S / 2, 66), name, font=f, fill=CREAM, anchor='mm')
+    d.rounded_rectangle([24, 92, S - 24, 120], 8, fill=CREAM)
+    d.text((S / 2, 106), 'BUZZED', font=font(19), fill=color, anchor='mm')
+    save(im, f'team-{i}')
+for i, (n, c) in enumerate(TEAMS, 1): team_key(i, n, c)
+def buzz_folder():
+    im, d = base(RAIL, GOLD)
+    for k, (n, c) in enumerate(TEAMS):
+        x = 25 + k * 20; d.ellipse([x, 36, x + 34, 70], fill=c, outline=CREAM, width=3)
+    f, sz = fit(d, ['BUZZED'], 104, 26)
+    d.text((S / 2, 108), 'BUZZED', font=f, fill=GOLD, anchor='mm')
+    save(im, 'buzzed-folder')
+buzz_folder()
 control('reveal', ['REVEAL'], FELT_D, GOLD, BAD, sub='NO POINTS')
 control('final-scores', ['FINAL', 'SCORES'], FELT_D, GOLD, GOLD)
 

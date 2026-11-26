@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Flip Side · Host</title>
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body class="host-page">
 <div class="host">
@@ -81,14 +81,14 @@
 
   <div class="card">
     <h2>Shortcuts <span class="note">(also work while the projector window is in front)</span></h2>
-    <div class="note">⌃⇧G go (next step) · ⌃⇧V solve · ⌃⇧A pick again · ⌃⇧C correct · ⌃⇧X wrong · ⌃⇧P pass turn · ⌃⇧R reveal puzzle · ⌃⇧U undo · ⌃⇧N next puzzle · ⌃⇧J join screen · ⌃⇧E final standings · ⌃⇧1…⌃⇧0 flip cards 1–10 · ⌃⌥⇧1…⌃⌥⇧0 flip cards 11–20</div>
+    <div class="note">⌃⇧G go (next step) · ⌃⇧V solve · ⌃⇧A pick again · ⌃⇧C correct · ⌃⇧X wrong · ⌃⇧P pass turn · ⌃⇧R reveal puzzle · ⌃⇧U undo · ⌃⇧N next puzzle · ⌃⇧J join screen · ⌃⇧E final standings · ⌃⇧F final wager puzzle · ⌃⇧T theme · ⌃⇧F1…F8 that team buzzed (teams left to right) · ⌃⇧1…⌃⇧0 flip cards 1–10 · ⌃⌥⇧1…⌃⌥⇧0 flip cards 11–20</div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="starters.js?v=6"></script>
-<script src="net.js?v=6"></script>
-<script src="engine.js?v=6"></script>
+<script src="starters.js?v=7"></script>
+<script src="net.js?v=7"></script>
+<script src="engine.js?v=7"></script>
 <script>
 const $ = id => document.getElementById(id);
 const act = (type, data) => {
@@ -150,6 +150,12 @@ function runKey(k) {
   const s = PP.state;
   if (k === 'go') return goStep(s);
   if (k === 'solve') return act('solve');
+  if (k.startsWith('buzz:')) {   // a team key: that team buzzed in to solve
+    const t = s && s.teams[Number(k.slice(5)) - 1];
+    if (t) act('solve', { teamId: t.id });
+    return;
+  }
+  if (k === 'finalPuzzle' && s && !['lobby', 'solved', 'final'].includes(s.phase)) { toast('Finish this puzzle first, then start the final wager puzzle.'); return; }
   if (k.startsWith('card:')) {   // a card key: flip that card (after a match it means "pick two more")
     const n = Number(k.slice(5));
     if (!s || !s.board[n - 1] || s.board[n - 1].gone) return;

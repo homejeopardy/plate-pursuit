@@ -369,12 +369,15 @@ function fsResultText(s) {
   return '';
 }
 // ---- keyboard shortcuts (stream deck): Ctrl+Shift+letter
-const FS_KEYS = { KeyG: 'go', KeyC: 'correct', KeyX: 'wrong', KeyU: 'undo', KeyN: 'next', KeyV: 'solve', KeyA: 'again', KeyP: 'pass', KeyR: 'reveal', KeyJ: 'lobby', KeyE: 'final' };
+const FS_KEYS = { KeyF: 'finalPuzzle', KeyT: 'theme', KeyG: 'go', KeyC: 'correct', KeyX: 'wrong', KeyU: 'undo', KeyN: 'next', KeyV: 'solve', KeyA: 'again', KeyP: 'pass', KeyR: 'reveal', KeyJ: 'lobby', KeyE: 'final' };
 function fsKeyName(e) {
   if (!e.ctrlKey || !e.shiftKey || e.metaKey) return null;
   // cards: Ctrl+Shift+1…9,0 flips cards 1–10; add Option/Alt for cards 11–20
   const d = /^Digit(\d)$/.exec(e.code);
   if (d) return 'card:' + ((Number(d[1]) || 10) + (e.altKey ? 10 : 0));
+  // teams: Ctrl+Shift+F1…F8 means the 1st…8th team (left to right) buzzed in
+  const f = /^F([1-8])$/.exec(e.code);
+  if (f && !e.altKey) return 'buzz:' + f[1];
   return e.altKey ? null : FS_KEYS[e.code] || null;
 }
 const _keyChan = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('flip-side-keys') : null;
