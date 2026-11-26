@@ -278,7 +278,7 @@ function ppShownScore(s, t) { return ppFinShown(s, t.id) ? t.score : (s.fin.base
 // ---- keyboard shortcuts (stream deck): Ctrl+Shift+letter -> what it does
 const PP_KEYS = { KeyG: 'go', KeyC: 'correct', KeyX: 'wrong', KeyO: 'reopen', KeyU: 'undo', KeyN: 'next', KeyR: 'reveal', KeyW: 'stepAll',
   KeyP: 'pass', KeyS: 'speed', KeyJ: 'lobby', KeyF: 'finalStart', KeyL: 'finalLock', KeyT: 'tiebreak', KeyE: 'final',
-  KeyD: 'double', KeyK: 'speedStop', Digit1: 'pick1', Digit2: 'pick2', Digit3: 'pick3', Digit4: 'pick4', Digit5: 'speed' };   // speed round page: pick a team, then send it
+  KeyD: 'double', KeyK: 'speedStop', KeyA: 'pick1', KeyB: 'pick2', KeyH: 'pick3', KeyI: 'pick4' };   // speed round page: pick a team (no number keys: Cmd+Shift+3/4 are Mac screenshots), then S sends it
 function ppKeyName(e) { return e.ctrlKey && e.shiftKey && !e.metaKey && !e.altKey ? PP_KEYS[e.code] || null : null; }
 const _keyChan = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('plate-pursuit-keys') : null;
 // projector / crew windows on the same computer: hand shortcut presses to the control page

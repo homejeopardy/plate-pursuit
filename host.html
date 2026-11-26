@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Host</title>
-<link rel="stylesheet" href="style.css?v=29">
+<link rel="stylesheet" href="style.css?v=30">
 </head>
 <body class="host-page">
 <div class="host">
@@ -86,24 +86,23 @@
       <div><kbd>⌃⇧R</kbd> reveal the answer (no points)</div>
       <div><kbd>⌃⇧W</kbd> show the whole answer at once</div>
       <div><kbd>⌃⇧P</kbd> pass (speed round)</div>
-      <div><kbd>⌃⇧S</kbd> set up the speed round (team picked under Rounds)</div>
+      <div><kbd>⌃⇧S</kbd> send the speed round to the board, for the team picked (under Rounds or with the team keys)</div>
       <div><kbd>⌃⇧J</kbd> join screen</div>
       <div><kbd>⌃⇧F</kbd> final wager plate</div>
       <div><kbd>⌃⇧L</kbd> lock final answers</div>
       <div><kbd>⌃⇧T</kbd> tie-breaker plate</div>
       <div><kbd>⌃⇧E</kbd> final standings</div>
-      <div><kbd>⌃⇧1</kbd>–<kbd>⌃⇧4</kbd> pick team 1–4 for the speed round (order of the Teams list)</div>
-      <div><kbd>⌃⇧5</kbd> send the speed round to the board (same as ⌃⇧S)</div>
+      <div><kbd>⌃⇧A</kbd> <kbd>⌃⇧B</kbd> <kbd>⌃⇧H</kbd> <kbd>⌃⇧I</kbd> pick team 1, 2, 3, 4 for the speed round (order of the Teams list)</div>
       <div><kbd>⌃⇧K</kbd> stop the speed-round clock</div>
       <div><kbd>⌃⇧D</kbd> double points on or off for the plate that's up</div></div>
   </div>
 </div>
 
-<script src="mode.js?v=29"></script>
+<script src="mode.js?v=30"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="engine.js?v=29"></script>
-<script src="states.js?v=29"></script>
-<script src="shared.js?v=29"></script>
+<script src="engine.js?v=30"></script>
+<script src="states.js?v=30"></script>
+<script src="shared.js?v=30"></script>
 <script>
 const $ = id => document.getElementById(id);
 const act = PP.act;
@@ -315,7 +314,7 @@ function runKey(name) {
   else if (name === 'speed') { if ($('speedTeam').value) { act('speedReady', { teamId: $('speedTeam').value }); toast(`Speed round for ${teamName(s, Number($('speedTeam').value))} is on the board.`); } }
   else if (/^pick\d$/.test(name)) {   // pick team 1–4 for the speed round (Teams-list order); nothing shows until it's sent
     const t = s.teams[Number(name.slice(4)) - 1]; if (!t) return;
-    $('speedTeam').value = String(t.id); toast(`Speed round: ${t.name} picked. Press SEND TO BOARD (⌃⇧5) to put it on the screen.`);
+    $('speedTeam').value = String(t.id); toast(`Speed round: ${t.name} picked. Press SEND TO BOARD (⌃⇧S) to put it on the screen.`);
   }
   else act(name);
 }
