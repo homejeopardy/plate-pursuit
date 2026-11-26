@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Flip Side · Host</title>
-<link rel="stylesheet" href="style.css?v=1">
+<link rel="stylesheet" href="style.css?v=2">
 </head>
 <body class="host-page">
 <div class="host">
@@ -54,6 +54,7 @@
       <label>Seconds to answer <input class="text-in" type="number" min="0" data-s="answerSeconds"></label>
       <label>Solve bonus <input class="text-in" type="number" min="0" step="50" data-s="solveBonus"></label>
       <label>Two-wild bonus <input class="text-in" type="number" min="0" step="50" data-s="wildBonus"></label>
+      <label>Wrong-answer penalty <input class="text-in" type="number" min="0" step="50" data-s="wrongPenalty"></label>
       <label>Seconds cards stay up <input class="text-in" type="number" min="1" data-s="peekSeconds"></label>
     </div>
     <p class="note" style="margin-bottom:0">Board: 20 cards. Seven pairs of points (100 to 700), a TAKE pair (steals the biggest card another team matched this puzzle), a LOSE A TURN pair (the cards come off, then the turn passes) and two WILD cards (a wild matches any card, and that card's twin comes off too). Only the team that solves banks its matches, plus the solve bonus. If the board is cleared without a solve, every team can buzz in.</p>
@@ -84,9 +85,9 @@
 </div>
 <div class="toast" id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="starters.js?v=1"></script>
-<script src="net.js?v=1"></script>
-<script src="engine.js?v=1"></script>
+<script src="starters.js?v=2"></script>
+<script src="net.js?v=2"></script>
+<script src="engine.js?v=2"></script>
 <script>
 const $ = id => document.getElementById(id);
 const act = (type, data) => {
@@ -185,7 +186,7 @@ function render(s) {
   if (s.phase === 'pick') c = B('pass', 'Pass turn', '', '⌃⇧P');
   if (s.phase === 'match') c = B('solve', 'Solve it', 'gold', '⌃⇧V') + (fsLeft(s) ? B('again', 'Pick two more', 'primary', '⌃⇧G') : '') + B('pass', 'Pass turn', '', '⌃⇧P');
   if (s.phase === 'miss' || s.phase === 'lost') c = B('hide', 'Next team now', 'primary', '⌃⇧G');
-  if (s.phase === 'solve') c = B('correct', 'Correct', 'good', '⌃⇧C') + B('wrong', 'Wrong', 'bad', '⌃⇧X');
+  if (s.phase === 'solve') c = B('correct', 'Correct', 'good', '⌃⇧C') + B('wrong', s.settings && s.settings.wrongPenalty ? `Wrong (−${s.settings.wrongPenalty})` : 'Wrong', 'bad', '⌃⇧X');
   if (s.phase === 'buzz') c = s.teams.filter(t => !s.locked.includes(t.id)).map(t => `<button class="btn" style="border-color:${teamColor(t)}" data-solve="${t.id}">${esc(t.name)} buzzed</button>`).join('');
   if (s.phase === 'solved') c = B('next', 'Next puzzle', 'primary', '⌃⇧G') + B('final', 'Final standings', 'gold', '⌃⇧E');
   if (['pick', 'match', 'miss', 'lost', 'buzz', 'solve'].includes(s.phase)) c += B('reveal', 'Reveal puzzle (no points)', '', '⌃⇧R');

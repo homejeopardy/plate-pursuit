@@ -359,7 +359,7 @@ function fsResultText(s) {
     if (r.cards.includes('WILD')) return `Wild card! +${r.points}`;
     return `Match! +${r.points}`;
   }
-  if (r.kind === 'wrong') return 'Not quite!';
+  if (r.kind === 'wrong') return r.penalty ? `Not quite! ${n(r.team)} −${r.penalty}` : 'Not quite!';
   if (r.kind === 'solved') return `${n(r.team)} solves it! +${r.points}`;
   if (r.kind === 'revealed') return 'Here it is';
   return '';

@@ -7,7 +7,7 @@ function createEngine(opts = {}) {
   const changed = () => { S.undoLabel = history.length ? history[history.length - 1].label : null; opts.persist && opts.persist(S); opts.onChange && opts.onChange(); };
   const COLORS = ['red', 'blue', 'orange', 'purple', 'teal', 'pink', 'green', 'brown'];
   const DEFAULT_TEAMS = [['CNSTTTNLWYR', 'red'], ['SCNCEGY', 'blue'], ['GEHLTHCR', 'orange'], ['PJMKRNDMR', 'purple']];
-  const DEFAULT_SETTINGS = { answerSeconds: 15, solveBonus: 500, peekSeconds: 3, wildBonus: 500 };
+  const DEFAULT_SETTINGS = { answerSeconds: 15, solveBonus: 500, peekSeconds: 3, wildBonus: 500, wrongPenalty: 200 };
   // 20 cards: 7 pairs of points, a TAKE pair, a LOSE A TURN pair, and two WILD cards
   const POINTS = [100, 200, 300, 400, 500, 600, 700];
   const STARTERS = (root.FS_STARTERS || []).map((p, i) => ({ id: 's' + i, ...p }));
@@ -131,7 +131,8 @@ function createEngine(opts = {}) {
     },
     wrong() {
       if (S.phase !== 'solve') return;
-      const id = S.solver; S.solver = null; S.answerEndsAt = null; S.result = { kind: 'wrong', team: id }; fire('wrong');
+      const id = S.solver, t = team(id), pen = Math.max(0, Number(S.settings.wrongPenalty) || 0); if (t) t.score -= pen;
+      S.solver = null; S.answerEndsAt = null; S.result = { kind: 'wrong', team: id, penalty: pen }; fire('wrong');
       if (!left()) { if (!S.locked.includes(id)) S.locked.push(id); S.phase = S.locked.length >= S.teams.length ? 'buzz' : 'buzz'; S.turn = null; return; }
       S.turn = id; endTurn();
     },
