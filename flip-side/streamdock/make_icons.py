@@ -58,9 +58,10 @@ def card(n):   # the red lattice card back with a cream number, like the project
     for k in range(-S, 2 * S, 16):
         d.line([(k, 0), (k + S, S)], fill=RED_D, width=2); d.line([(k, S), (k + S, 0)], fill=RED_D, width=2)
     d.rounded_rectangle([7, 7, S - 8, S - 8], 12, outline=CREAM, width=5)
-    d.ellipse([30, 30, S - 31, S - 31], fill=CREAM, outline=RED_D, width=3)
+    d.ellipse([30, 30, S - 30, S - 30], fill=CREAM, outline=RED_D, width=3)
     f = font(50 if n < 10 else 44)
-    d.text((S / 2, S / 2 + 2), str(n), font=f, fill=RED_D, anchor='mm')
+    l, t, r, b = d.textbbox((0, 0), str(n), font=f, anchor='lt')   # centre the ink itself, not the font's line box
+    d.text((S / 2 - (l + r) / 2, S / 2 - (t + b) / 2), str(n), font=f, fill=RED_D, anchor='lt')
     save(im, f'card-{n:02d}')
 
 # main page
