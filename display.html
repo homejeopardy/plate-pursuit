@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plate Pursuit · Projector</title>
-<link rel="stylesheet" href="style.css?v=34">
+<link rel="stylesheet" href="style.css?v=36">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body class="display-page">
@@ -16,10 +16,10 @@
 <div class="unlock" id="unlock"><div class="sign green">Click to start the projector<small>Turns on sound and goes full screen</small></div></div>
 <div class="conn" id="conn"></div>
 
-<script src="mode.js?v=34"></script>
+<script src="mode.js?v=36"></script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
-<script src="states.js?v=34"></script>
-<script src="shared.js?v=34"></script>
+<script src="states.js?v=36"></script>
+<script src="shared.js?v=36"></script>
 <script>
 const $ = id => document.getElementById(id);
 let lastEv = null, lastKey = '', lastPlateKey = '', fxNext = null;
@@ -180,14 +180,13 @@ function renderTeams(s, scoring = false) {
     speedready: 'Speed round', speed: 'Speed round', speedover: 'Speed round', final: 'Game over', awards: 'Awards',
     fwager: 'Final plate', fanswer: 'Final plate', fjudge: 'Final plate' };
   $('round').textContent = s.tb && !['final', 'lobby'].includes(s.phase) ? 'Tie-breaker' : (roundNames[s.phase] || '');
-  const html = s.teams.map(t => {
+  const html = s.phase === 'lobby' ? '' : s.teams.map(t => {   // join screen: no names or scores
     const cls = [s.buzzed === t.id && s.phase === 'buzzed' ? 'buzzed' : '',
       s.locked.includes(t.id) && (['running', 'buzzed', 'paused'].includes(s.phase) || (s.tb && s.phase === 'ready')) ? 'out' : '',
       s.speed && s.speed.teamId === t.id && s.phase.startsWith('speed') ? 'active' : ''].join(' ');
     let sub = '';
-    if (s.fin && s.phase === 'fwager') sub = s.fin.wagers[t.id] != null ? 'BET IN' : 'betting…';
-    else if (s.fin && s.phase === 'fanswer') sub = s.fin.answers[t.id] != null ? 'ANSWERED' : 'typing…';
-    else if (s.fin && s.phase === 'fjudge' && !finShown(s, t.id)) sub = '?';
+    // (no 'bet in' / 'answered' on the projector while teams are betting or typing)
+    if (s.fin && s.phase === 'fjudge' && !finShown(s, t.id)) sub = '?';
     else if (s.fin && s.phase === 'fjudge') {
       const m = s.fin.marks[t.id], w = s.fin.wagers[t.id] || 0;
       sub = esc(s.fin.answers[t.id] || '(no answer)') + (m === true ? ` <b class="plus">+${w}</b>` : m === false ? ` <b class="minus">−${w}</b>` : '');
